@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: "Smart Clipping (Blender Addon)"
+message: "If you use this addon in research or publications, please cite it."
+type: software
+authors:
+  - family-names: "Kono"
+version: "1.0.0"
+date-released: "2026-02-08"
+url: "https://github.com/marc2825/Blender_SmartClip.git"
