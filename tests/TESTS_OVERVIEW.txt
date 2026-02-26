@@ -1,0 +1,110 @@
+Smart Clipping — Tests Overview
+================================
+
+Two test scripts are provided: one for automated headless CI, one for manual interactive UI validation.
+
+
+────────────────────────────────────────────────────────────────────────
+1. headless_test_runner.py  (automated, no display required)
+────────────────────────────────────────────────────────────────────────
+
+Run all cases:
+  blender --background --factory-startup --python tests/headless_test_runner.py
+
+Run a single case:
+  blender --background --factory-startup --python tests/headless_test_runner.py -- --case <name>
+
+Test cases
+----------
+scene_props
+  Verifies that all seven Scene properties are registered after addon load:
+  smartclip_enabled, target_scope, target_collection, smartclip_runtime_info,
+  smartclip_align_x, smartclip_align_y, smartclip_align_z.
+
+scope_self
+  Sets Target Scope = SELF and builds the KD-Tree.
+  Asserts only the active object's own vertices are inserted (8 verts, 1 cube).
+
+scope_selected
+  Sets Target Scope = SELECTED with two selected objects and one unselected.
+  Asserts only the non-active selected object's vertices appear in the tree;
+  the unselected object is excluded.
+
+scope_visible_sort
+  Sets Target Scope = VISIBLE with three cubes at different distances.
+  Asserts that objects are inserted nearest-first (distance sort order) and
+  total point count equals 24 (3 cubes × 8 verts).
+
+budget_fallback
+  Sets vertex budget to 8 (= one cube) with three cubes visible.
+  Asserts limit_exceeded is True and the over-budget objects appear in
+  bounds_objects and contain only BOUNDS-type points.
+
+scope_collection
+  Creates two collections (SC_Test_A, SC_Test_B) and sets Target Scope = COLLECTION
+  pointing to SC_Test_A.
+  Asserts only the two objects in SC_Test_A appear as snap candidates (16 verts total).
+
+stress_100k
+  Creates a 320×320 grid mesh (~102 400 verts) exceeding the 50 000-vert budget.
+  Asserts the heavy mesh is in bounds_objects and the tree point count stays below
+  1 000. Build elapsed time is printed for performance reference.
+
+Exit behaviour
+--------------
+  Exits with code 0 if all selected cases pass, code 1 if any fail.
+  Individual PASS / FAIL lines are printed for each case.
+
+
+────────────────────────────────────────────────────────────────────────
+2. manual_ui_setup.py  (interactive, opens Blender with a prepared scene)
+────────────────────────────────────────────────────────────────────────
+
+Run:
+  blender --python tests/manual_ui_setup.py
+
+What the script sets up
+-----------------------
+  SC_Active        — cube at origin; this is the object you move during tests
+  SC_Near_X        — cube at (4, 0, 0); tests X-axis alignment
+  SC_Near_Y        — cube at (0, 4, 0); tests Y-axis alignment
+  SC_Near_Z        — cube at (0, 0, 4); tests Z-axis alignment
+  SC_Diag          — cube at (4, 4, 0); tests free/diagonal snap
+  SC_Heavy_100k    — 320×320 grid at (25, 0, 0); triggers BOUNDS fallback
+  SC_COL_A/B       — cubes in collection "SC_Manual_Refs"; tests COLLECTION scope
+
+  Preferences: max_vertex_budget=50000, snap_distance_px=30
+  Scene: smartclip_enabled=True, target_scope=VISIBLE
+  Active object: SC_Active (selected, others deselected)
+
+Validation checklist
+--------------------
+  [ Soft/Hard Snap ]
+    1. N-Panel > Tool > Smart Clipping: Enable Smart Clipping ON, Scope=VISIBLE.
+    2. Press Smart Clipping Move (or Shift+G). Move toward SC_Near_X/Y/Z/Diag.
+    3. Purple guide and soft pull toward the candidate should appear.
+    4. Hold RMB near a candidate — guide turns cyan (hard snap).
+    5. LMB or Enter to confirm; ESC to cancel and restore position.
+
+  [ Axis Align Mode ]
+    6. N-Panel: enable Axis Align Z only.
+    7. Run Smart Clipping Move, move freely — z=4.0 (SC_Near_Z) should be suggested.
+    8. A dashed line from the alignment point to the reference vertex should appear.
+    9. Disable Z, enable X — x=4.0 suggested (SC_Near_X and SC_Diag).
+
+  [ Axis / Plane Constraint ]
+   10. Start a move, then press X — movement locks to X axis (red line appears).
+   11. Press X again to release. Try Y and Z similarly.
+   12. Press Shift+X — movement locks to the YZ plane.
+   13. Combine constraint with Axis Align and Hard Snap.
+
+  [ Bounds Fallback ]
+   14. N-Panel runtime info should show "Box Mode" — SC_Heavy_100k exceeds budget.
+
+  [ Collection Scope ]
+   15. Change Scope=COLLECTION, collection=SC_Manual_Refs.
+   16. Only SC_COL_A and SC_COL_B should appear as snap candidates.
+
+  [ Edit Mode ]
+   17. Tab into Edit Mode on SC_Active, select some vertices.
+   18. Run Smart Clipping Move — selected verts move; unselected verts snap as targets.
