@@ -53,9 +53,9 @@ an addon on GitHub.
 
 - [ ] Demo video or GIFs
 - [ ] Screenshots in README
-- [ ] Real maintainer usernames in `CODEOWNERS`
-- [ ] Repo-specific Discussions URL in `.github/ISSUE_TEMPLATE/config.yml`
-- [ ] Real repo URL in `CITATION.cff`
+- [x] Real maintainer usernames in `CODEOWNERS`
+- [x] Repo-specific Discussions URL in `.github/ISSUE_TEMPLATE/config.yml`
+- [x] Real repo URL in `CITATION.cff`
 - [ ] Repository topics and social preview image
 - [ ] Clear support SLA and maintenance policy
 - [ ] Optional docs site (GitHub Pages)

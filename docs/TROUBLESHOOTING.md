@@ -10,7 +10,8 @@
 
 1. Verify addon is enabled.
 2. Verify `Enable Smart Clipping` is on in N-panel.
-3. Check keymap conflicts for `Shift + Alt + G`.
+3. Open addon Preferences and confirm hotkeys are registered.
+4. If needed, remove conflicts or change the key in addon Preferences.
 
 ## No snap candidates found
 

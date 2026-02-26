@@ -3,7 +3,6 @@ Create a manual validation scene for Smart Clipping UI/operator tests.
 
 Usage:
   blender --python tests/manual_ui_setup.py
-  (Run inside Blender UI; this script prepares objects/collections and prints steps.)
 """
 
 import os
@@ -11,7 +10,6 @@ import sys
 
 import bmesh
 import bpy
-
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
@@ -31,7 +29,6 @@ def ensure_addon_enabled():
         try:
             bpy.ops.preferences.addon_enable(module="src")
         except Exception:
-            # Keep running; core setup is still useful.
             pass
 
 
@@ -84,25 +81,32 @@ def main():
     clear_scene()
 
     scene = bpy.context.scene
-    scene.src_enabled = True
+    scene.smartclip_enabled = True
     scene.target_scope = "VISIBLE"
 
     prefs = bpy.context.preferences.addons.get("src")
     if prefs:
         prefs = prefs.preferences
         prefs.max_vertex_budget = 50000
-        prefs.snap_distance_px = 15
+        prefs.snap_distance_px = 30
 
+    # Active object (origin)
     active = add_cube("SC_Active", (0.0, 0.0, 0.0))
-    add_cube("SC_Near_1", (3.0, 0.0, 0.0))
-    add_cube("SC_Near_2", (0.0, 3.0, 0.0))
-    add_cube("SC_Far_1", (12.0, 0.0, 0.0))
-    heavy = add_heavy_grid("SC_Heavy_100k", (20.0, 0.0, 0.0), x_verts=320, y_verts=320)
 
+    # Near targets for regular snap / Axis Align validation
+    add_cube("SC_Near_X",  (4.0,  0.0, 0.0))   # aligned on X axis
+    add_cube("SC_Near_Y",  (0.0,  4.0, 0.0))   # aligned on Y axis
+    add_cube("SC_Near_Z",  (0.0,  0.0, 4.0))   # aligned on Z axis
+    add_cube("SC_Diag",    (4.0,  4.0, 0.0))   # diagonal — tests free snap
+
+    # Far object for distance-sort / budget validation
+    heavy = add_heavy_grid("SC_Heavy_100k", (25.0, 0.0, 0.0), x_verts=320, y_verts=320)
+
+    # Collection scope targets
     col = bpy.data.collections.new("SC_Manual_Refs")
     scene.collection.children.link(col)
-    c1 = add_cube("SC_COL_A", (-6.0, 0.0, 0.0))
-    c2 = add_cube("SC_COL_B", (-8.0, 2.0, 0.0))
+    c1 = add_cube("SC_COL_A", (-5.0, 0.0, 0.0))
+    c2 = add_cube("SC_COL_B", (-5.0, 3.0, 2.0))
     link_only_to_collection(c1, col)
     link_only_to_collection(c2, col)
     scene.target_collection = col
@@ -111,17 +115,20 @@ def main():
     active.select_set(True)
     bpy.context.view_layer.objects.active = active
 
+    print("\n=== Smart Clipping Manual Validation Scene ===")
+    print("  SC_Active (origin) | SC_Near_X/Y/Z | SC_Diag | SC_COL_A/B | SC_Heavy_100k")
+    print("  Scope=VISIBLE, budget=50000, snap_px=30  |  See tests/TESTS_OVERVIEW.txt")
     print("")
-    print("=== Smart Clipping Manual Validation Scene Ready ===")
-    print("1) Open N-Panel > Tool > Smart Clipping.")
-    print("2) Check toggle: Enable Smart Clipping.")
-    print("3) Scope=VISIBLE, press Shift+Alt+G, move active object, observe guide/HUD.")
-    print("4) Hold Ctrl during move to verify hard snap color (cyan).")
-    print("5) Confirm runtime info shows Box Mode when heavy mesh is included.")
-    print("6) Change Scope=COLLECTION and collection=SC_Manual_Refs, repeat move test.")
-    print("7) Enter Edit Mode on SC_Active, select vertices, run Shift+Alt+G again.")
-    print(f"Heavy object: {heavy.name}, verts={len(heavy.data.vertices)}")
-    print("====================================================")
+    print("[ Soft/Hard Snap ]  Shift+G → move near SC_Near_* → soft pull (purple).")
+    print("                    Hold RMB near candidate → hard snap (cyan). LMB/Enter=confirm, ESC=cancel.")
+    print("[ Axis Align ]      N-Panel Axis Align Z ON → move freely → z=4.0 suggested (SC_Near_Z).")
+    print("                    Switch to X → x=4.0 suggested (SC_Near_X / SC_Diag).")
+    print("[ Constraint ]      During modal: X/Y/Z = axis lock, Shift+X/Y/Z = plane lock (toggle).")
+    print("[ Bounds ]          N-Panel runtime info should show 'Box Mode' (SC_Heavy_100k).")
+    print("[ Collection ]      Scope=COLLECTION, col=SC_Manual_Refs → only SC_COL_A/B as targets.")
+    print("[ Edit Mode ]       Tab → select verts → Shift+G → selected move, unselected snap.")
+    print(f"\n  Heavy: {heavy.name}, verts={len(heavy.data.vertices)}")
+    print("================================================")
 
 
 if __name__ == "__main__":

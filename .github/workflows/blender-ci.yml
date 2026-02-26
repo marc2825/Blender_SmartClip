@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - master
-      - develop
   pull_request:
   workflow_dispatch:
 
@@ -52,15 +51,8 @@ jobs:
 
       - name: Python Syntax Check
         run: |
-          python -m py_compile \
-            src/__init__.py \
-            src/prefs.py \
-            src/utils.py \
-            src/detector.py \
-            src/drawing.py \
-            src/ops.py \
-            tests/headless_test_runner.py \
-            tests/manual_ui_setup.py
+          find src tests scripts -name '*.py' -print0 \
+            | xargs -0 python -m py_compile
 
       - name: Run Headless Addon Tests
         run: |

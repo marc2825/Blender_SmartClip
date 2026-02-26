@@ -144,10 +144,13 @@ def _temporary_budget(max_vertex_budget):
 
 
 def case_scene_properties_registered():
-    assert hasattr(bpy.types.Scene, "src_enabled")
+    assert hasattr(bpy.types.Scene, "smartclip_enabled")
     assert hasattr(bpy.types.Scene, "target_scope")
     assert hasattr(bpy.types.Scene, "target_collection")
-    assert hasattr(bpy.types.Scene, "src_runtime_info")
+    assert hasattr(bpy.types.Scene, "smartclip_runtime_info")
+    assert hasattr(bpy.types.Scene, "smartclip_align_x")
+    assert hasattr(bpy.types.Scene, "smartclip_align_y")
+    assert hasattr(bpy.types.Scene, "smartclip_align_z")
 
 
 def case_scope_self():
