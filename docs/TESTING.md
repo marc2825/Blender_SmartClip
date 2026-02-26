@@ -26,7 +26,9 @@ Then validate:
 
 1. N-panel settings
 2. Soft snap guides
-3. Ctrl hard snap behavior
-4. HUD updates
-5. Object mode transform application
-6. Edit mode vertex transform application
+3. Right-click hard snap behavior (hold right mouse button during modal)
+4. Axis Align mode (X / Y / Z toggles in N-Panel)
+5. Axis / plane constraint during modal (X / Y / Z, Shift+X / Y / Z)
+6. HUD updates
+7. Object mode transform application
+8. Edit mode vertex transform application

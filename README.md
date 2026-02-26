@@ -1,4 +1,4 @@
-# Smart Clipping (Blender Addon) v1.0.0
+# Smart Clipping (Blender Addon) v1.1.0
 
 ## 日本語 (JA)
 
@@ -141,12 +141,15 @@ docs/
 - 移動開始（`invoke`）時に対象をスナップショット化し、静的 KD-Tree で近傍候補を検索します。
 - スナップ対象は `Target Scope`（`SELF` / `SELECTED` / `VISIBLE` / `COLLECTION`）で制御できます。
 - `max_vertex_budget` を超える重いメッシュは `BOUNDS` に自動フォールバックして負荷を抑えます。
-- `find_candidates` は実際の 3D View コンテキスト（`region/rv3d`）に依存します。
+- スナップ候補のスクリーン距離フィルタは、マウスカーソルではなく移動中の頂点/オブジェクトの投影位置を基準にします。
 - ヘッドレステストは対話的なマウス操作を完全再現できないため、UI挙動は手動検証を併用してください。
 - 以下はプレースホルダなので公開前に更新してください:
   - `.github/CODEOWNERS`
   - `.github/ISSUE_TEMPLATE/config.yml`
   - `CITATION.cff`
+
+### 開発について
+本アドオンは **[Claude Code](https://claude.ai/claude-code)（Anthropic）** と **[Codex](https://openai.com/codex)（OpenAI）** との協調開発により作成されました。
 
 ---
 
@@ -197,7 +200,7 @@ It applies soft snap when close (gradual interpolation toward a candidate), hard
 #### Axis Align Mode
 Enable one or more axis toggles (X / Y / Z) in the **Axis Align** section of the N-Panel. When active, snapping targets axis coordinate values from reference vertices instead of exact vertex positions.
 
-- **All off (default)**: Regular vertex snapping. Snaps directly to nearby vertex positions in 3D space near the mouse cursor.
+- **All off (default)**: Regular vertex snapping. Snaps directly to nearby vertex positions in 3D space near the current object/vertex position.
 - **1 axis on** (e.g. Z only): If a reference vertex has z=1, the addon suggests snapping to z=1 regardless of XY position. X on similarly suggests alignment to X coordinates.
 - **Multiple axes on** (e.g. X and Z): Each axis generates independent candidates; the best-scoring **single axis** wins (does not align to two axes simultaneously).
 
@@ -264,9 +267,12 @@ blender --python tests/manual_ui_setup.py
 - At move start (`invoke`), target geometry is snapshotted and queried through a static KD-Tree.
 - Snap target range is controlled by `Target Scope` (`SELF` / `SELECTED` / `VISIBLE` / `COLLECTION`).
 - Heavy meshes exceeding `max_vertex_budget` automatically fall back to `BOUNDS` mode.
-- `find_candidates` depends on real 3D View `region/rv3d` context.
+- Screen-space candidate filtering uses the projected position of the moving vertex/object, not the raw mouse cursor.
 - Headless tests cannot fully reproduce interactive viewport behavior, so run manual UI checks as well.
 - Update placeholders before publishing:
   - `.github/CODEOWNERS`
   - `.github/ISSUE_TEMPLATE/config.yml`
   - `CITATION.cff`
+
+### Development
+This addon was developed in collaboration with **[Claude Code](https://claude.ai/claude-code) (Anthropic)** and **[Codex](https://openai.com/codex) (OpenAI)**.

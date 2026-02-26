@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Smart Clipping",
     "author": "marc2825",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Smart Clipping",
     "description": "Static KD-Tree based move snapping with vertex budget control",

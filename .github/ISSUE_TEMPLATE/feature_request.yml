@@ -11,6 +11,7 @@ body:
       description: What user problem are you trying to solve?
     validations:
       required: true
+
   - type: textarea
     id: proposal
     attributes:
@@ -18,12 +19,14 @@ body:
       description: Describe your proposed behavior or API.
     validations:
       required: true
+
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
     validations:
       required: false
+      
   - type: textarea
     id: context
     attributes:

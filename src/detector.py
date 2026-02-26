@@ -24,8 +24,8 @@ class SnapCandidate:
     """A single snap target returned by *find_candidates*.
 
     type values:
-      POINT / BOUNDS                – regular proximity snap
-      ALIGN_X / ALIGN_Y / ALIGN_Z  – axis-clipping mode
+      POINT / BOUNDS                - regular proximity snap
+      ALIGN_X / ALIGN_Y / ALIGN_Z  - axis-clipping mode
     """
     type: str
     location: Vector     # world-space snap destination
