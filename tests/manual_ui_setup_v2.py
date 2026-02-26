@@ -2,8 +2,7 @@
 Create a manual validation scene for Smart Clipping UI/operator tests.
 
 Usage:
-  blender --python tests/manual_ui_setup.py
-  (Run inside Blender UI; this script prepares objects/collections and prints steps.)
+  blender --python tests/manual_ui_setup_v2.py
 """
 
 import os
@@ -11,7 +10,6 @@ import sys
 
 import bmesh
 import bpy
-
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
@@ -31,7 +29,6 @@ def ensure_addon_enabled():
         try:
             bpy.ops.preferences.addon_enable(module="src")
         except Exception:
-            # Keep running; core setup is still useful.
             pass
 
 
@@ -84,7 +81,7 @@ def main():
     clear_scene()
 
     scene = bpy.context.scene
-    scene.src_enabled = True
+    scene.smartclip_enabled = True
     scene.target_scope = "VISIBLE"
 
     prefs = bpy.context.preferences.addons.get("src")
@@ -112,16 +109,16 @@ def main():
     bpy.context.view_layer.objects.active = active
 
     print("")
-    print("=== Smart Clipping Manual Validation Scene Ready ===")
+    print("=== Smart Clipping (src) Manual Validation Scene Ready ===")
     print("1) Open N-Panel > Tool > Smart Clipping.")
     print("2) Check toggle: Enable Smart Clipping.")
-    print("3) Scope=VISIBLE, press Smart Clipping Move button (or your assigned hotkey).")
+    print("3) Scope=VISIBLE, press Smart Clipping Move button (or Shift+G).")
     print("4) Hold Ctrl during move to verify hard snap color (cyan).")
     print("5) Confirm runtime info shows Box Mode when heavy mesh is included.")
     print("6) Change Scope=COLLECTION and collection=SC_Manual_Refs, repeat move test.")
     print("7) Enter Edit Mode on SC_Active, select vertices, run move again.")
     print(f"Heavy object: {heavy.name}, verts={len(heavy.data.vertices)}")
-    print("====================================================")
+    print("============================================================")
 
 
 if __name__ == "__main__":
