@@ -6,7 +6,7 @@
 
 👉 [English README](#english-en)
 
-![Demo](assets/teaser.mp4)
+![Demo](assets/teaser.gif)
 
 ## 日本語 (JA)
 
@@ -14,6 +14,7 @@
 **Smart Clipping** は、Blender の移動操作を拡張するアドオンです。  
 オブジェクトや頂点を移動するときに、周囲の要素を候補として検出し、3DガイドとHUDを表示しながら、近接要素へのスナップを補助します。  
 近づいたときは Soft Snap（候補点へ徐々に引き寄せる補間）、右クリック長押しで Hard Snap（候補点へ完全に固定）を適用し、`Target Scope` で探索範囲を切り替えられます。
+
 （このアドオンは、Microsoft PowerPoint の [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) にインスパイアされて誕生しました。）
 
 ### 対応環境
@@ -134,7 +135,8 @@ blender --python tests/manual_ui_setup.py
 **Smart Clipping** is a Blender addon that enhances move operations.  
 While moving objects or vertices, it detects nearby candidates and assists snapping with a 3D guide and HUD feedback.  
 It applies soft snap when close (gradual interpolation toward a candidate), hard snap while holding right-click (fully locks to the candidate), and lets you control search range via `Target Scope`.
-This addon is inspired by [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) in Microsoft PowerPoint.
+
+(This addon is inspired by [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) in Microsoft PowerPoint.)
 
 ### Requirements
 - Blender: 4.0 LTS+
