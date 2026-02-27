@@ -1,11 +1,20 @@
 # Smart Clipping (Blender Addon) v1.1.0
 
+![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)
+[![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=release)](https://github.com/marc2825/Blender_SmartClip/releases/latest)
+[![License](https://img.shields.io/github/license/marc2825/Blender_SmartClip)](https://github.com/marc2825/Blender_SmartClip/blob/main/LICENSE)
+
+👉 [English README](#english-en)
+
+![Demo](assets/teaser.mp4)
+
 ## 日本語 (JA)
 
 ### 概要
 **Smart Clipping** は、Blender の移動操作を拡張するアドオンです。  
 オブジェクトや頂点を移動するときに、周囲の要素を候補として検出し、3DガイドとHUDを表示しながら、近接要素へのスナップを補助します。  
 近づいたときは Soft Snap（候補点へ徐々に引き寄せる補間）、右クリック長押しで Hard Snap（候補点へ完全に固定）を適用し、`Target Scope` で探索範囲を切り替えられます。
+（このアドオンは、Microsoft PowerPoint の [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) にインスパイアされて誕生しました。）
 
 ### 対応環境
 - Blender: 4.0 LTS 以降
@@ -103,40 +112,6 @@ blender --python tests/manual_ui_setup.py
   - タグ `v*.*.*` で `src-vX.Y.Z.zip` と `sha256` を生成・公開
 - Security Scan: `.github/workflows/codeql.yml`
 
-### 公開運用ファイル
-- `LICENSE`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`
-- `SECURITY.md`, `SUPPORT.md`, `RELEASE_CHECKLIST.md`
-- `.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md`
-- `.github/dependabot.yml`, `.github/release.yml`, `.github/CODEOWNERS`
-- `docs/PUBLISHING_CHECKLIST.md`, `docs/GITHUB_SETUP.md`, `docs/TESTING.md`
-- `docs/TROUBLESHOOTING.md`, `docs/ROADMAP.md`
-- `scripts/package_addon.py`
-
-### リポジトリ構成
-```text
-src/
-  __init__.py
-  ops.py
-  detector.py
-  drawing.py
-  utils.py
-  prefs.py
-
-tests/
-  headless_test_runner.py
-  manual_ui_setup.py
-
-scripts/
-  package_addon.py
-
-docs/
-  PUBLISHING_CHECKLIST.md
-  GITHUB_SETUP.md
-  TESTING.md
-  TROUBLESHOOTING.md
-  ROADMAP.md
-```
-
 ### 詳細・注意
 - 移動開始（`invoke`）時に対象をスナップショット化し、静的 KD-Tree で近傍候補を検索します。
 - スナップ対象は `Target Scope`（`SELF` / `SELECTED` / `VISIBLE` / `COLLECTION`）で制御できます。
@@ -149,7 +124,7 @@ docs/
   - `CITATION.cff`
 
 ### 開発について
-本アドオンは **[Claude Code](https://claude.ai/claude-code)（Anthropic）** と **[Codex](https://openai.com/codex)（OpenAI）** との協調開発により作成されました。
+本アドオンは **[Claude Code](https://claude.com/product/claude-code)（Anthropic）** と **[Codex](https://openai.com/codex)（OpenAI）** との協調開発により作成されました。
 
 ---
 
@@ -159,6 +134,7 @@ docs/
 **Smart Clipping** is a Blender addon that enhances move operations.  
 While moving objects or vertices, it detects nearby candidates and assists snapping with a 3D guide and HUD feedback.  
 It applies soft snap when close (gradual interpolation toward a candidate), hard snap while holding right-click (fully locks to the candidate), and lets you control search range via `Target Scope`.
+This addon is inspired by [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) in Microsoft PowerPoint.
 
 ### Requirements
 - Blender: 4.0 LTS+
@@ -254,15 +230,6 @@ blender --python tests/manual_ui_setup.py
 - Release: `.github/workflows/release-addon.yml`
 - Security scan: `.github/workflows/codeql.yml`
 
-### Publishing Assets
-- `LICENSE`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`
-- `SECURITY.md`, `SUPPORT.md`, `RELEASE_CHECKLIST.md`
-- `.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md`
-- `.github/dependabot.yml`, `.github/release.yml`, `.github/CODEOWNERS`
-- `docs/PUBLISHING_CHECKLIST.md`, `docs/GITHUB_SETUP.md`, `docs/TESTING.md`
-- `docs/TROUBLESHOOTING.md`, `docs/ROADMAP.md`
-- `scripts/package_addon.py`
-
 ### Notes
 - At move start (`invoke`), target geometry is snapshotted and queried through a static KD-Tree.
 - Snap target range is controlled by `Target Scope` (`SELF` / `SELECTED` / `VISIBLE` / `COLLECTION`).
@@ -275,4 +242,4 @@ blender --python tests/manual_ui_setup.py
   - `CITATION.cff`
 
 ### Development
-This addon was developed in collaboration with **[Claude Code](https://claude.ai/claude-code) (Anthropic)** and **[Codex](https://openai.com/codex) (OpenAI)**.
+This addon was developed in collaboration with **[Claude Code](https://claude.com/product/claude-code) (Anthropic)** and **[Codex](https://openai.com/codex) (OpenAI)**.
