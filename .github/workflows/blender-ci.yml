@@ -10,13 +10,19 @@ on:
 
 jobs:
   headless-tests:
+    name: headless-tests (Blender ${{ matrix.blender }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # minimum supported / previous LTS / current LTS
+        blender: ["4.0.2", "4.2.23", "5.2.4"]
     env:
-      BLENDER_VERSION: 4.0.2
+      BLENDER_VERSION: ${{ matrix.blender }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Version Consistency Check
         run: python scripts/versioning.py
@@ -54,7 +60,7 @@ jobs:
 
       - name: Python Syntax Check
         run: |
-          find src tests scripts -name '*.py' -print0 \
+          find smart_clipping tests scripts -name '*.py' -print0 \
             | xargs -0 python -m py_compile
 
       - name: Run Headless Addon Tests
