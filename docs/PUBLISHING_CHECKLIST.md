@@ -8,16 +8,16 @@ an addon on GitHub.
 - [x] `README.md`
 - [x] `LICENSE`
 - [x] `CHANGELOG.md`
-- [x] `CITATION.cff` (placeholder URL, should be customized)
+- [x] `CITATION.cff` (version kept in sync with `bl_info` by `scripts/versioning.py`)
 - [x] `.gitignore`
 - [x] `.gitattributes`
 - [x] `.editorconfig`
 
 ## 2. Community and Governance
 
-- [x] `CONTRIBUTING.md`
-- [x] `CODE_OF_CONDUCT.md`
-- [x] `SECURITY.md`
+- [ ] `CONTRIBUTING.md`
+- [ ] `CODE_OF_CONDUCT.md`
+- [ ] `SECURITY.md`
 - [x] `SUPPORT.md`
 - [x] `RELEASE_CHECKLIST.md`
 
@@ -27,7 +27,7 @@ an addon on GitHub.
 - [x] Issue template: feature request
 - [x] Issue template config
 - [x] PR template
-- [x] `CODEOWNERS` (placeholder, must be customized)
+- [x] `CODEOWNERS`
 
 ## 4. Automation and CI/CD
 
@@ -40,6 +40,7 @@ an addon on GitHub.
 ## 5. Testing Artifacts
 
 - [x] Headless test runner script
+- [x] Automated UI test script (simulated input)
 - [x] Manual UI setup script
 
 ## 6. Addon Distribution Artifacts
@@ -51,7 +52,7 @@ an addon on GitHub.
 
 ## 7. Recommended But Manual (Not Auto-Added)
 
-- [ ] Demo video or GIFs
+- [x] Demo video or GIFs (`assets/teaser.gif`)
 - [ ] Screenshots in README
 - [x] Real maintainer usernames in `CODEOWNERS`
 - [x] Repo-specific Discussions URL in `.github/ISSUE_TEMPLATE/config.yml`

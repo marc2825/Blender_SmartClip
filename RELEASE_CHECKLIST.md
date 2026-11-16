@@ -4,9 +4,12 @@
 
 1. Run local tests:
    - `blender --background --factory-startup --python tests/headless_test_runner.py`
+   - `blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py`
 2. Run manual checks:
    - `blender --python tests/manual_ui_setup.py`
-3. Confirm `bl_info["version"]` and changelog entry are updated.
+3. Bump `bl_info["version"]` (the single source of truth) and update `CHANGELOG.md`,
+   `CITATION.cff` (`version`, `date-released`), and the README title to match.
+   - `python scripts/versioning.py` must pass.
 4. Confirm CI workflow is green on default branch.
 
 ## Release
