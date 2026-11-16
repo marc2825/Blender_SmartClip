@@ -14,12 +14,14 @@
 
 ## Release
 
-1. Create a semantic version tag:
-   - `vMAJOR.MINOR.PATCH`
-2. Push the tag.
-3. Verify GitHub Release workflow completed successfully.
-4. Verify release artifact includes only:
-   - `src/*.py`
+1. Optional dry run: Actions > Release Addon > Run workflow with the version
+   (`gh workflow run release-addon.yml -f version=X.Y.Z`); check the artifact's
+   ZIP and RELEASE_NOTES.md.
+2. Create and push a semantic version tag on the release commit:
+   - `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Verify the Release Addon workflow completed and the GitHub Release has
+   `smart_clipping-vX.Y.Z.zip` and `.sha256` attached.
+4. Verify the ZIP contains only `smart_clipping/*.py`.
 
 ## Post-Release
 

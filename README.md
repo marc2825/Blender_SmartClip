@@ -1,4 +1,4 @@
-# Smart Clipping (Blender Addon) v1.1.0
+# Smart Clipping (Blender Addon) v2.0.0
 
 ![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)
 [![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=release)](https://github.com/marc2825/Blender_SmartClip/releases/latest)
@@ -30,19 +30,31 @@
 - **Axis Align モード**（X / Y / Z 軸トグル）
 - **軸 / 面拘束**（モーダル中に `X` / `Y` / `Z` / `Shift+X` / `Shift+Y` / `Shift+Z`）
 - 3D ガイド線表示と左下 HUD 表示
-- Object Mode / Edit Mode の両対応
+- Object Mode（選択中の全オブジェクト）/ Edit Mode（編集中の全メッシュの選択頂点）の両対応
+- スナップ先はモディファイア適用後の見た目どおりの形状
+- 確定後に「最後の操作を調整」パネルで移動量（Offset）を数値修正可能
 
 ### インストール
-1. `src/` フォルダを ZIP 化（またはアドオンディレクトリに配置）
-2. Blender > Preferences > Add-ons > Install で ZIP を指定
-3. アドオンを有効化
+1. [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) から `smart_clipping-vX.Y.Z.zip` をダウンロード
+2. Blender > Preferences > Add-ons > Install from Disk（4.1 以前は Install）で ZIP を指定
+3. アドオン「Smart Clipping」を有効化
+
+#### 1.x からの更新
+2.0.0 でアドオンのモジュール名が `src` から `smart_clipping` に変わりました。
+
+1. Preferences > Add-ons で旧「Smart Clipping」（モジュール `src`）を無効化して削除してから、新しい ZIP をインストールしてください（両方を有効にすると登録が衝突します）
+2. アドオン設定（Snap Threshold・Max Vertex Budget・色）は初期値に戻るので、必要なら設定し直してください
+3. `.blend` に保存された Scene 設定（Target Scope / Collection）は、ファイルを開いたときに自動で引き継がれます
 
 ### 使い方
 1. View3D > N-Panel > Tool > Smart Clipping を開く
 2. `Enable Smart Clipping` を ON
 3. `Target Scope` を選択（`COLLECTION` の場合は `Collection` を指定）
-4. N-Panel の `Smart Clipping Move` ボタンで起動（必要なら Preferences でホットキーを追加）
+4. `Shift+G`（Object Mode / Edit Mode）または N-Panel の `Smart Clipping Move` ボタンで起動
 5. 通常移動で Soft Snap（候補へ徐々に引き寄せ）、右クリック長押しで Hard Snap（候補へ完全固定）
+6. 確定後、左下の「最後の操作を調整」パネルで `Offset` を数値で修正できます
+
+`Enable Smart Clipping` を OFF にすると `Shift+G` は Blender 標準の動作（Select Grouped / Select Similar）に戻ります。
 
 #### モーダル操作キー
 
@@ -110,9 +122,15 @@ blender --background --factory-startup --python tests/headless_test_runner.py --
 - `axis_align_gate`
 - `axis_align_dense`
 - `find_hit_cap`
+- `object_mode_excludes_movers`
+- `evaluated_mesh_targets`
+- `execute_moves_all_selected`
+- `execute_edit_multi_object`
+- `legacy_prop_migration`
+- `pixel_world_size`
 
 #### UI 自動テスト（ウィンドウが開きます）
-モーダル操作をイベントシミュレーションで実行し、親付きオブジェクトの移動・ESC 復元・ビュー回転中の移動・拘束・Hard Snap・Edit Mode を検証します。
+モーダル操作をイベントシミュレーションで実行し、親付きオブジェクトの移動・ESC 復元・ビュー回転中の移動・拘束・Redo 用 Offset・複数オブジェクト移動・Hard Snap・Edit Mode を検証します。
 ```powershell
 blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
 ```
@@ -124,17 +142,20 @@ blender --python tests/manual_ui_setup.py
 
 ### CI/CD
 - CI: `.github/workflows/blender-ci.yml`
-  - バージョン表記の整合チェック（`scripts/versioning.py`）と、Blender を取得してのヘッドレステスト
+  - バージョン表記の整合チェック（`scripts/versioning.py`）と、Blender 4.0 / 4.2 LTS / 5.2 LTS でのヘッドレステスト
 - Release: `.github/workflows/release-addon.yml`
-  - タグ `v*.*.*` で `src-vX.Y.Z.zip` と `sha256` を生成・公開（タグと `bl_info` のバージョンが一致しないと失敗）
-- バージョンの正本は `src/__init__.py` の `bl_info["version"]` です。上げるときは `CHANGELOG.md`・`CITATION.cff`・README のタイトルも合わせて更新してください
+  - タグ `v*.*.*` で `smart_clipping-vX.Y.Z.zip` と `sha256` を生成し、CHANGELOG の該当節を本文にして GitHub Release を公開（タグと `bl_info` のバージョンが一致しないと失敗）
+  - 手動実行（workflow_dispatch）は Release を作らない試験実行で、ZIP とリリースノートを Artifact に保存します
+- バージョンの正本は `smart_clipping/__init__.py` の `bl_info["version"]` です。上げるときは `CHANGELOG.md`・`CITATION.cff`・README のタイトルも合わせて更新してください
 - Security Scan: `.github/workflows/codeql.yml`
 
 ### 詳細・注意
 - 移動開始（`invoke`）時に対象をスナップショット化し、静的 KD-Tree で近傍候補を検索します。
 - スナップ対象は `Target Scope`（`SELF` / `SELECTED` / `VISIBLE` / `COLLECTION`）で制御できます。
 - 頂点は移動元に近いオブジェクトから順に `max_vertex_budget` まで登録します。予算をまたぐオブジェクトは残り予算ぶんに間引いて登録し、それ以降のオブジェクトはバウンディングボックス（`BOUNDS`）だけになります。
-- Object Mode では移動中のオブジェクト自身はスナップ対象にならないため、ツリーに登録せず予算も消費しません。
+- Object Mode では移動中のオブジェクト（とその子）自身はスナップ対象にならないため、ツリーに登録せず予算も消費しません。親と子を両方選択しても子が二重に動くことはなく、`lock_location` でロックした軸は動きません。
+- スナップ対象の形状はモディファイア適用後のものです（Edit Mode 中のオブジェクトは編集中のメッシュ）。
+- 探索半径はビューの縮尺に追従するため、ミリ単位の小さなシーンでもキロ単位の大きなシーンでも同じ感覚で使えます。
 - スナップ候補のスクリーン距離フィルタは、マウスカーソルではなく移動中の頂点/オブジェクトの投影位置を基準にします。
 - 移動中にビューを回転・パン・ズームしても、移動中の位置は飛びません。
 - ヘッドレステストは対話的なマウス操作を完全再現できないため、UI 自動テストと手動検証を併用してください。
@@ -166,19 +187,31 @@ It applies soft snap when close (gradual interpolation toward a candidate), hard
 - **Axis Align mode** (X / Y / Z toggles)
 - **Axis / plane constraint** (press `X`/`Y`/`Z` or `Shift+X`/`Shift+Y`/`Shift+Z` during modal)
 - 3D guide rendering and lower-left HUD text
-- Works in both Object Mode and Edit Mode
+- Object Mode (all selected objects) and Edit Mode (selected vertices of every mesh in Edit Mode)
+- Snaps to the displayed geometry (modifiers applied)
+- Fine-tune the final `Offset` in the Adjust Last Operation panel
 
 ### Installation
-1. Zip `src/` (or place it directly in your addons directory)
-2. Blender > Preferences > Add-ons > Install
-3. Enable the addon
+1. Download `smart_clipping-vX.Y.Z.zip` from [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest)
+2. Blender > Preferences > Add-ons > Install from Disk (Install on 4.1 and older)
+3. Enable "Smart Clipping"
+
+#### Upgrading from 1.x
+In 2.0.0 the add-on module was renamed from `src` to `smart_clipping`.
+
+1. Disable and remove the old "Smart Clipping" (module `src`) in Preferences > Add-ons before installing the new ZIP (enabling both makes their registrations collide)
+2. Add-on preferences (snap threshold, vertex budget, colors) start from their defaults again
+3. Scene settings saved in `.blend` files (Target Scope / Collection) are migrated automatically when the file is opened
 
 ### Usage
 1. Open View3D > N-Panel > Tool > Smart Clipping
 2. Enable `Enable Smart Clipping`
 3. Choose `Target Scope` (`Collection` is required for `COLLECTION`)
-4. Start from the `Smart Clipping Move` button (or assign a hotkey in Preferences)
+4. Press `Shift+G` (Object Mode / Edit Mode) or use the `Smart Clipping Move` button
 5. Move for soft snap (gradual pull toward candidate), hold right-click for hard snap (full lock to candidate)
+6. After confirming, adjust `Offset` numerically in the Adjust Last Operation panel
+
+Turning `Enable Smart Clipping` off gives `Shift+G` back to Blender (Select Grouped / Select Similar).
 
 #### Modal Controls
 
@@ -246,9 +279,15 @@ Cases:
 - `axis_align_gate`
 - `axis_align_dense`
 - `find_hit_cap`
+- `object_mode_excludes_movers`
+- `evaluated_mesh_targets`
+- `execute_moves_all_selected`
+- `execute_edit_multi_object`
+- `legacy_prop_migration`
+- `pixel_world_size`
 
 #### Automated UI (opens a window)
-Drives the modal operator with simulated events: parented objects, ESC restore, navigating mid-move, constraints, hard snap, and Edit Mode.
+Drives the modal operator with simulated events: parented objects, ESC restore, navigating mid-move, constraints, the redo offset, multi-object moves, hard snap, and Edit Mode.
 ```powershell
 blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
 ```
@@ -259,16 +298,18 @@ blender --python tests/manual_ui_setup.py
 ```
 
 ### CI/CD
-- CI: `.github/workflows/blender-ci.yml` (version consistency check via `scripts/versioning.py` + headless tests)
-- Release: `.github/workflows/release-addon.yml` (fails if the tag does not match `bl_info`)
+- CI: `.github/workflows/blender-ci.yml` (version consistency check via `scripts/versioning.py` + headless tests on Blender 4.0 / 4.2 LTS / 5.2 LTS)
+- Release: `.github/workflows/release-addon.yml` — a `v*.*.*` tag builds `smart_clipping-vX.Y.Z.zip` + `sha256` and publishes a GitHub Release whose body is the CHANGELOG section (fails if the tag does not match `bl_info`). A manual run (workflow_dispatch) is a dry run that only uploads the ZIP and notes as an artifact.
 - Security scan: `.github/workflows/codeql.yml`
-- The single source of truth for the version is `bl_info["version"]` in `src/__init__.py`; bump `CHANGELOG.md`, `CITATION.cff`, and the README title together with it.
+- The single source of truth for the version is `bl_info["version"]` in `smart_clipping/__init__.py`; bump `CHANGELOG.md`, `CITATION.cff`, and the README title together with it.
 
 ### Notes
 - At move start (`invoke`), target geometry is snapshotted and queried through a static KD-Tree.
 - Snap target range is controlled by `Target Scope` (`SELF` / `SELECTED` / `VISIBLE` / `COLLECTION`).
 - Vertices are inserted nearest object first up to `max_vertex_budget`. The object crossing the limit is down-sampled into the remaining budget; objects after it contribute only their bounding box (`BOUNDS`).
-- In Object Mode the moving object itself is never a snap target, so it is not inserted and does not consume budget.
+- In Object Mode the moving objects (and their children) are never snap targets, so they are not inserted and do not consume budget. Selecting a parent and its child does not move the child twice, and axes locked with `lock_location` stay put.
+- Snap targets use the evaluated geometry (modifiers applied); objects in Edit Mode use their edit mesh.
+- The search radius follows the view scale, so tiny (mm) and huge (km) scenes behave the same.
 - Screen-space candidate filtering uses the projected position of the moving vertex/object, not the raw mouse cursor.
 - Orbiting, panning, or zooming during a move does not make the selection jump.
 - Headless tests cannot fully reproduce interactive viewport behavior, so also run the automated UI test and manual checks.

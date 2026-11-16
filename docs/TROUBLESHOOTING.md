@@ -2,7 +2,7 @@
 
 ## Addon does not appear in Blender
 
-1. Confirm you installed the ZIP containing `src/__init__.py`.
+1. Confirm you installed the release ZIP (`smart_clipping-vX.Y.Z.zip`, containing `smart_clipping/__init__.py`). When upgrading from 1.x, remove the old add-on (module `src`) first.
 2. Confirm Blender version is 4.0 or newer.
 3. Open Blender console and look for import errors.
 
