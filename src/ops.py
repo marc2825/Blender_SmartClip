@@ -5,7 +5,11 @@ Lifecycle
 invoke  -- build KD-Tree, snapshot initial state, register draw handlers.
 modal   -- process mouse / keyboard, query tree, apply snap, redraw.
 finish  -- remove draw handlers, optionally restore initial state.
+cancel  -- called by Blender when the modal is aborted externally
+           (file load, window close): restore and clean up.
 """
+
+import traceback
 
 import bmesh
 import bpy
@@ -13,7 +17,62 @@ from mathutils import Vector
 
 from . import detector, drawing
 from .prefs import get_addon_prefs
-from .utils import clamp01, screen_to_world, world_delta_to_local, world_to_screen
+from .utils import (
+    DEFAULT_SNAP_DISTANCE_PX,
+    apply_constraint,
+    clamp01,
+    constraint_axes,
+    screen_to_world,
+    world_delta_to_local,
+    world_to_location_matrix,
+    world_to_screen,
+)
+
+# World-space KD-Tree search radius bounds.  The screen-pixel filter
+# (snap_distance_px) is the real gatekeeper; the radius only pre-filters.
+MIN_QUERY_RADIUS = 5.0
+MAX_QUERY_RADIUS = 50.0
+
+# Soft-snap pull strength at zero screen distance.
+SOFT_PULL_POINT = 0.35
+SOFT_PULL_ALIGN = 0.5
+
+# Events handed to Blender so the viewport can be navigated mid-move.
+_NAVIGATION_EVENTS = {
+    "MIDDLEMOUSE", "WHEELUPMOUSE", "WHEELDOWNMOUSE",
+    "TRACKPADPAN", "TRACKPADZOOM", "MOUSEROTATE", "MOUSESMARTZOOM",
+    "NDOF_MOTION",
+}
+
+# Every draw handler currently installed by a running operator.  Kept at
+# module level so unregister() can remove leftovers even if an operator
+# instance died without cleaning up.
+_live_draw_handles: list = []
+
+
+def remove_all_draw_handlers():
+    """Remove every draw handler installed by this module (used on unregister)."""
+    for handle in _live_draw_handles:
+        try:
+            bpy.types.SpaceView3D.draw_handler_remove(handle, "WINDOW")
+        except (ValueError, RuntimeError):
+            pass
+    _live_draw_handles.clear()
+
+
+def _add_handler(callback, op, draw_type):
+    handle = bpy.types.SpaceView3D.draw_handler_add(callback, (op, None), "WINDOW", draw_type)
+    _live_draw_handles.append(handle)
+    return handle
+
+
+def _remove_handler(handle):
+    try:
+        bpy.types.SpaceView3D.draw_handler_remove(handle, "WINDOW")
+    except (ValueError, RuntimeError):
+        pass
+    if handle in _live_draw_handles:
+        _live_draw_handles.remove(handle)
 
 
 class SMARTCLIP_OT_modal_move(bpy.types.Operator):
@@ -70,6 +129,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         # Mouse start
         self._start_mouse = _event_to_region(event, self._region)
         self._last_mouse = self._start_mouse.copy()
+        self._solved_mouse = self._start_mouse.copy()
 
         # Snapshot the geometry that will be moved
         if self._is_edit:
@@ -77,13 +137,17 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
                 self.report({"WARNING"}, "Select at least one vertex")
                 return {"CANCELLED"}
         else:
-            self._init_obj_loc = self._active_obj.location.copy()
-            self._start_world = self._init_obj_loc.copy()
+            obj = self._active_obj
+            self._init_obj_loc = obj.location.copy()
+            # The origin's world position; `location` is in parent space.
+            self._start_world = obj.matrix_world.translation.copy()
+            self._world_to_loc = world_to_location_matrix(obj)
 
         # Depth reference for mouse unprojection
         self._start_mouse_world = screen_to_world(
             self._region, self._rv3d, self._start_mouse, self._start_world,
         )
+        self._view_matrix = self._rv3d.perspective_matrix.copy()
 
         # Build spatial index (heavy work happens here, once)
         # In Edit Mode, pass the selected vertex indices so only those are
@@ -93,10 +157,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             context, active_obj=self._active_obj,
             moving_vert_indices=moving_verts,
         )
-        if self._build.limit_exceeded:
-            scene.smartclip_runtime_info = "Limit exceeded: Switched to Box Mode"
-        else:
-            scene.smartclip_runtime_info = f"Vertices in tree: {self._build.source_vertex_count}"
+        scene.smartclip_runtime_info = _runtime_info(self._build)
 
         # Register GPU draw handlers
         self._add_draw_handlers()
@@ -106,6 +167,21 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
     # --------------------------------------------------------------- modal
     def modal(self, context, event):
+        try:
+            return self._handle_event(context, event)
+        except Exception:
+            # Never leave a half-moved selection or orphaned draw handlers.
+            traceback.print_exc()
+            self.report({"ERROR"}, "Smart Clipping aborted by an internal error (see console)")
+            self._safe_restore()
+            self._finish(context)
+            return {"CANCELLED"}
+
+    def cancel(self, context):
+        self._safe_restore()
+        self._finish(context)
+
+    def _handle_event(self, context, event):
         # Cancel (ESC only — right-click is used for hard snap)
         if event.type == "ESC" and event.value == "PRESS":
             self._restore()
@@ -118,7 +194,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             return {"FINISHED"}
 
         # Pass through viewport navigation (orbit / pan / zoom)
-        if event.type in {"MIDDLEMOUSE", "WHEELUPMOUSE", "WHEELDOWNMOUSE"}:
+        if event.type in _NAVIGATION_EVENTS:
             return {"PASS_THROUGH"}
 
         # Right-click hold = hard snap
@@ -139,15 +215,8 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             self._do_snap(context)
             return {"RUNNING_MODAL"}
 
-        # Consume Ctrl / Shift / Alt / any other modifier to prevent Blender
-        # defaults (Ctrl+Z, Ctrl+S, Shift+G …) from firing during modal.
-        if event.type in {"LEFT_CTRL", "RIGHT_CTRL",
-                          "LEFT_SHIFT", "RIGHT_SHIFT",
-                          "LEFT_ALT", "RIGHT_ALT",
-                          "OSKEY"}:
-            return {"RUNNING_MODAL"}
-
-        # All remaining events are consumed (BLOCKING modal).
+        # All remaining events (incl. Ctrl / Shift / Alt) are consumed so
+        # Blender defaults (Ctrl+Z, Ctrl+S, Shift+G …) cannot fire mid-move.
         return {"RUNNING_MODAL"}
 
     # ------------------------------------------------- internal helpers
@@ -160,10 +229,14 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
         self._start_mouse = Vector((0.0, 0.0))
         self._last_mouse = Vector((0.0, 0.0))
+        self._solved_mouse = Vector((0.0, 0.0))  # mouse used by the last solve
         self._start_world = Vector((0.0, 0.0, 0.0))
         self._start_mouse_world = Vector((0.0, 0.0, 0.0))
+        self._raw_movement = Vector((0.0, 0.0, 0.0))  # before constraints
+        self._view_matrix = None
 
         self._init_obj_loc = None
+        self._world_to_loc = None
         self._init_vert_cos = {}  # {vert_index: Vector}
 
         # Axis / plane movement constraint (like G then X/Y/Z / Shift+X/Y/Z)
@@ -189,12 +262,14 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
     def _snapshot_edit_mode(self) -> bool:
         bm = bmesh.from_edit_mesh(self._active_obj.data)
         bm.verts.ensure_lookup_table()
-        sel = [v for v in bm.verts if v.select]
+        # Use lookup-table positions (BMVert.index may be dirty after edits);
+        # they match mesh.vertices order once the edit mesh is flushed.
+        sel = {i: v.co.copy() for i, v in enumerate(bm.verts) if v.select}
         if not sel:
             return False
-        center_local = sum((v.co for v in sel), Vector()) / len(sel)
+        center_local = sum(sel.values(), Vector()) / len(sel)
         self._start_world = self._active_obj.matrix_world @ center_local
-        self._init_vert_cos = {v.index: v.co.copy() for v in sel}
+        self._init_vert_cos = sel
         return True
 
     # ------------------------------------------------ constraint toggle
@@ -217,38 +292,41 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         else:
             self.constraint_mode = target
 
-    def _apply_constraint(self, movement: Vector) -> Vector:
-        """Zero-out movement components blocked by the active constraint."""
-        if not self.constraint_mode:
-            return movement
-        m = movement.copy()
-        if self.constraint_mode == "X":
-            m.y = 0.0; m.z = 0.0
-        elif self.constraint_mode == "Y":
-            m.x = 0.0; m.z = 0.0
-        elif self.constraint_mode == "Z":
-            m.x = 0.0; m.y = 0.0
-        elif self.constraint_mode == "XY":
-            m.z = 0.0
-        elif self.constraint_mode == "XZ":
-            m.y = 0.0
-        elif self.constraint_mode == "YZ":
-            m.x = 0.0
-        return m
+    def _constrain_to_start(self, world_co: Vector) -> Vector:
+        """Project *world_co* onto the active constraint through the start point."""
+        return self._start_world + apply_constraint(world_co - self._start_world,
+                                                    self.constraint_mode)
+
+    # ----------------------------------------------------- view changes
+    def _sync_view(self):
+        """Re-anchor mouse tracking after the user navigated the viewport.
+
+        Movement is measured on a view-aligned plane, so after orbit / pan /
+        zoom the old anchor no longer matches and the selection would jump.
+        Rebase the anchor so the free position stays continuous.
+        """
+        current = self._rv3d.perspective_matrix
+        if self._view_matrix is not None and current == self._view_matrix:
+            return
+        self._view_matrix = current.copy()
+        mouse_world = screen_to_world(
+            self._region, self._rv3d, self._solved_mouse, self._start_world,
+        )
+        self._start_mouse_world = mouse_world - self._raw_movement
 
     # --------------------------------------------------------- snap core
     def _do_snap(self, context):
         prefs = get_addon_prefs(context)
-        threshold_px = prefs.snap_distance_px if prefs else 15
-        # World-space search radius for the KD-Tree.  The screen-pixel filter
-        # (snap_distance_px) is the real gatekeeper, so this can be generous.
-        query_radius = max(5.0, threshold_px * 0.5)
+        threshold_px = prefs.snap_distance_px if prefs else DEFAULT_SNAP_DISTANCE_PX
+        query_radius = min(MAX_QUERY_RADIUS, max(MIN_QUERY_RADIUS, threshold_px * 0.5))
 
+        self._sync_view()
         mouse_world = screen_to_world(
             self._region, self._rv3d, self._last_mouse, self._start_world,
         )
-        movement = mouse_world - self._start_mouse_world
-        movement = self._apply_constraint(movement)
+        self._solved_mouse = self._last_mouse.copy()
+        self._raw_movement = mouse_world - self._start_mouse_world
+        movement = apply_constraint(self._raw_movement, self.constraint_mode)
         self.free_world = self._start_world + movement
 
         # Use the projected vertex/object position for screen-space filtering,
@@ -257,15 +335,12 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         if free_screen is None:
             free_screen = self._last_mouse  # fallback if behind camera
 
-        # Axis-clipping mode: use axis search instead of regular search
+        # Axis-clipping mode: only axes the constraint lets us move along
         scene = context.scene
-        axis_flags = set()
-        if getattr(scene, "smartclip_align_x", False):
-            axis_flags.add("X")
-        if getattr(scene, "smartclip_align_y", False):
-            axis_flags.add("Y")
-        if getattr(scene, "smartclip_align_z", False):
-            axis_flags.add("Z")
+        axis_flags = {
+            axis for axis in ("X", "Y", "Z")
+            if getattr(scene, f"smartclip_align_{axis.lower()}", False)
+        } & constraint_axes(self.constraint_mode)
 
         if axis_flags:
             candidates = detector.find_axis_candidates(
@@ -276,7 +351,6 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
                 mouse_xy=free_screen,
                 snap_distance_px=threshold_px,
                 axis_flags=axis_flags,
-                query_radius=query_radius,
             )
         else:
             candidates = detector.find_candidates(
@@ -295,19 +369,13 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         if self.current_candidate:
             cand = self.current_candidate
             if self.hard_snap:
-                self.applied_world = cand.location.copy()
-            elif cand.type.startswith("ALIGN_"):
-                # Axis-clipping soft snap: use world-space axis distance
-                axis_idx = {"ALIGN_X": 0, "ALIGN_Y": 1, "ALIGN_Z": 2}[cand.type]
-                axis_dist = abs(self.free_world[axis_idx] - cand.location[axis_idx])
-                ratio = 1.0 - min(axis_dist / max(0.01, query_radius * 10), 1.0)
-                soft = clamp01(ratio) * 0.5
-                self.applied_world = self.free_world.lerp(cand.location, soft)
+                target = cand.location.copy()
             else:
-                # Regular soft snap: use screen distance
+                pull = SOFT_PULL_ALIGN if cand.type.startswith("ALIGN_") else SOFT_PULL_POINT
                 ratio = 1.0 - (cand.screen_dist / max(1.0, threshold_px))
-                soft = clamp01(ratio) * 0.35
-                self.applied_world = self.free_world.lerp(cand.location, soft)
+                target = self.free_world.lerp(cand.location, clamp01(ratio) * pull)
+            # Snapping must not break an active axis / plane constraint.
+            self.applied_world = self._constrain_to_start(target)
         else:
             self.applied_world = self.free_world.copy()
 
@@ -318,8 +386,8 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             context.area.tag_redraw()
 
     def _apply_position(self, world_co: Vector):
+        delta_w = world_co - self._start_world
         if self._is_edit:
-            delta_w = world_co - self._start_world
             delta_l = world_delta_to_local(self._active_obj, delta_w)
             bm = bmesh.from_edit_mesh(self._active_obj.data)
             bm.verts.ensure_lookup_table()
@@ -327,10 +395,12 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
                 bm.verts[idx].co = orig + delta_l
             bmesh.update_edit_mesh(self._active_obj.data, loop_triangles=False, destructive=False)
         else:
-            self._active_obj.location = world_co
+            self._active_obj.location = self._init_obj_loc + self._world_to_loc @ delta_w
 
     def _restore(self):
         if self._is_edit:
+            if not self._init_vert_cos:
+                return
             bm = bmesh.from_edit_mesh(self._active_obj.data)
             bm.verts.ensure_lookup_table()
             for idx, orig in self._init_vert_cos.items():
@@ -338,6 +408,12 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             bmesh.update_edit_mesh(self._active_obj.data, loop_triangles=False, destructive=False)
         elif self._init_obj_loc is not None:
             self._active_obj.location = self._init_obj_loc
+
+    def _safe_restore(self):
+        try:
+            self._restore()
+        except Exception:
+            traceback.print_exc()
 
     def _update_hud(self):
         parts = []
@@ -375,22 +451,18 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
     # ----------------------------------------------- draw handler mgmt
     def _add_draw_handlers(self):
         if self._handle_3d is None:
-            self._handle_3d = bpy.types.SpaceView3D.draw_handler_add(
-                drawing.draw_3d, (self, None), "WINDOW", "POST_VIEW",
-            )
+            self._handle_3d = _add_handler(drawing.draw_3d, self, "POST_VIEW")
         if self._handle_2d is None:
-            self._handle_2d = bpy.types.SpaceView3D.draw_handler_add(
-                drawing.draw_2d, (self, None), "WINDOW", "POST_PIXEL",
-            )
+            self._handle_2d = _add_handler(drawing.draw_2d, self, "POST_PIXEL")
         self.draw_enabled = True
 
     def _remove_draw_handlers(self):
         self.draw_enabled = False
         if self._handle_3d is not None:
-            bpy.types.SpaceView3D.draw_handler_remove(self._handle_3d, "WINDOW")
+            _remove_handler(self._handle_3d)
             self._handle_3d = None
         if self._handle_2d is not None:
-            bpy.types.SpaceView3D.draw_handler_remove(self._handle_2d, "WINDOW")
+            _remove_handler(self._handle_2d)
             self._handle_2d = None
 
     def _finish(self, context):
@@ -402,6 +474,17 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 # ------------------------------------------------------------------
 # Helpers (module-level)
 # ------------------------------------------------------------------
+
+def _runtime_info(build) -> str:
+    if build is None:
+        return ""
+    if not build.limit_exceeded:
+        return f"Vertices in tree: {build.source_vertex_count}"
+    return (
+        f"Budget exceeded: {build.source_vertex_count} verts "
+        f"(sampled: {len(build.partial_objects)}, box only: {len(build.bounds_objects)})"
+    )
+
 
 def _resolve_region(context):
     """Return (region, rv3d) for the active 3-D viewport."""

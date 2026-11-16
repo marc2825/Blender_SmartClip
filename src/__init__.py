@@ -11,8 +11,9 @@ bl_info = {
 import bpy
 from bpy.props import BoolProperty, EnumProperty, PointerProperty, StringProperty
 
-from .ops import SMARTCLIP_OT_modal_move
+from .ops import SMARTCLIP_OT_modal_move, remove_all_draw_handlers
 from .prefs import SMARTCLIP_AddonPreferences, get_addon_prefs
+from .utils import DEFAULT_VERTEX_BUDGET
 
 
 # ======================================================================
@@ -52,7 +53,7 @@ class SMARTCLIP_PT_panel(bpy.types.Panel):
         box = layout.box()
         box.label(text="Performance:")
         prefs = get_addon_prefs(context)
-        budget = prefs.max_vertex_budget if prefs else 50000
+        budget = prefs.max_vertex_budget if prefs else DEFAULT_VERTEX_BUDGET
         box.label(text=f"Max Vertices: {budget}")
         info = getattr(scene, "smartclip_runtime_info", "")
         if info:
@@ -260,6 +261,7 @@ def register():
 
 
 def unregister():
+    remove_all_draw_handlers()
     _unregister_keymaps()
 
     props = (
