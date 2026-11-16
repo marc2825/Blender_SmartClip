@@ -1,7 +1,8 @@
 Smart Clipping — Tests Overview
 ================================
 
-Two test scripts are provided: one for automated headless CI, one for manual interactive UI validation.
+Three test scripts are provided: automated headless (CI), automated UI (local, opens a
+window), and a scene setup for manual interactive validation.
 
 
 ────────────────────────────────────────────────────────────────────────
@@ -23,7 +24,9 @@ scene_props
 
 scope_self
   Sets Target Scope = SELF and builds the KD-Tree.
-  Asserts only the active object's own vertices are inserted (8 verts, 1 cube).
+  Object Mode: the moving object is never a target, so the tree is empty.
+  Edit Mode (moving vertex indices given): all 8 verts are inserted and only the
+  moving ones are excluded.
 
 scope_selected
   Sets Target Scope = SELECTED with two selected objects and one unselected.
@@ -32,13 +35,13 @@ scope_selected
 
 scope_visible_sort
   Sets Target Scope = VISIBLE with three cubes at different distances.
-  Asserts that objects are inserted nearest-first (distance sort order) and
-  total point count equals 24 (3 cubes × 8 verts).
+  Asserts that the other objects are inserted nearest-first (distance sort
+  order), the active object is skipped, and the point count equals 16.
 
 budget_fallback
-  Sets vertex budget to 8 (= one cube) with three cubes visible.
-  Asserts limit_exceeded is True and the over-budget objects appear in
-  bounds_objects and contain only BOUNDS-type points.
+  Sets vertex budget to 8 (= one cube) with two target cubes visible.
+  Asserts the nearest cube fills the budget and the other one appears in
+  bounds_objects with only BOUNDS-type points.
 
 scope_collection
   Creates two collections (SC_Test_A, SC_Test_B) and sets Target Scope = COLLECTION
@@ -47,8 +50,37 @@ scope_collection
 
 stress_100k
   Creates a 320×320 grid mesh (~102 400 verts) exceeding the 50 000-vert budget.
-  Asserts the heavy mesh is in bounds_objects and the tree point count stays below
-  1 000. Build elapsed time is printed for performance reference.
+  Asserts the heavy mesh is down-sampled into the budget (partial_objects) plus its
+  9 bounds points. Build elapsed time is printed for performance reference.
+
+budget_partial
+  Budget 108 with a cube, a 400-vert grid and a far cube. The grid crossing the
+  limit is sampled into the remaining 100 slots; the far cube gets bounds only.
+
+scope_collection_recursive
+  COLLECTION scope includes objects of nested child collections.
+
+edit_mode_sync
+  Adds a vertex in Edit Mode without leaving it; the tree must contain it
+  (edit mesh flushed) and exclude it by its index.
+
+parent_space_delta
+  World-space deltas are converted into the parent space of `location` for a
+  child whose parent was transformed after parenting.
+
+constraint_helpers
+  Axis / plane constraint masking helpers.
+
+axis_align_gate
+  Axis Align only suggests values within the pixel threshold, prefers the closest
+  reference vertex, and skips the axis parallel to the view direction.
+
+axis_align_dense
+  The nearest alignment value is found even when thousands of values lie on one
+  side of it.
+
+find_hit_cap
+  The per-query projection cap does not count excluded (moving) points.
 
 Exit behaviour
 --------------
@@ -57,7 +89,28 @@ Exit behaviour
 
 
 ────────────────────────────────────────────────────────────────────────
-2. manual_ui_setup.py  (interactive, opens Blender with a prepared scene)
+2. ui_operator_test.py  (automated, needs a display; opens a window briefly)
+────────────────────────────────────────────────────────────────────────
+
+Run:
+  blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
+
+Drives the modal operator through simulated mouse / keyboard events and checks:
+  - Shift+G starts the operator
+  - a child whose parent was transformed follows the mouse exactly (no parent-space
+    mix-up) and ESC restores it
+  - orbiting the view mid-move does not make the object jump
+  - an X constraint holds in world space; LMB confirms
+  - holding RMB hard-snaps exactly onto a target vertex
+  - Edit Mode moves the selected vertex and ESC restores it
+  - no Python errors were printed (e.g. from draw handlers)
+
+Set SMARTCLIP_UI_SCREENSHOT_DIR to save constraint.png / hard_snap.png overlays.
+Exits with code 0 if all checks pass, 1 otherwise.
+
+
+────────────────────────────────────────────────────────────────────────
+3. manual_ui_setup.py  (interactive, opens Blender with a prepared scene)
 ────────────────────────────────────────────────────────────────────────
 
 Run:
@@ -98,8 +151,8 @@ Validation checklist
    12. Press Shift+X — movement locks to the YZ plane.
    13. Combine constraint with Axis Align and Hard Snap.
 
-  [ Bounds Fallback ]
-   14. N-Panel runtime info should show "Box Mode" — SC_Heavy_100k exceeds budget.
+  [ Budget ]
+   14. N-Panel runtime info should show "Budget exceeded" — SC_Heavy_100k is sampled.
 
   [ Collection Scope ]
    15. Change Scope=COLLECTION, collection=SC_Manual_Refs.

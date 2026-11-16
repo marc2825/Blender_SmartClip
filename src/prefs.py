@@ -2,6 +2,8 @@ import bpy
 from bpy.props import FloatVectorProperty, IntProperty
 from bpy.types import AddonPreferences
 
+from .utils import DEFAULT_SNAP_DISTANCE_PX, DEFAULT_VERTEX_BUDGET
+
 ADDON_MODULE_NAME = __package__
 
 
@@ -18,15 +20,18 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
     snap_distance_px: IntProperty(
         name="Snap Threshold (px)",
         description="Screen-space distance in pixels for snap detection",
-        default=30,
+        default=DEFAULT_SNAP_DISTANCE_PX,
         min=1,
         max=1000,
     )
 
     max_vertex_budget: IntProperty(
         name="Max Vertex Budget",
-        description="Vertex count limit; objects exceeding this switch to bounding-box mode",
-        default=50000,
+        description=(
+            "Vertex count limit for the snap tree (nearest objects first). The object "
+            "crossing the limit is down-sampled; objects beyond it use bounding-box corners"
+        ),
+        default=DEFAULT_VERTEX_BUDGET,
         min=100,
         max=10_000_000,
     )

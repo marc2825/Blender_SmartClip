@@ -18,6 +18,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Version Consistency Check
+        run: python scripts/versioning.py
+
       - name: Install Blender Runtime Dependencies
         run: |
           set -euxo pipefail

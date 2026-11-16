@@ -1,5 +1,11 @@
-from mathutils import Vector
+from mathutils import Matrix, Vector
 from bpy_extras.view3d_utils import location_3d_to_region_2d, region_2d_to_location_3d
+
+# Shared defaults (used when addon preferences are unavailable).
+DEFAULT_SNAP_DISTANCE_PX = 30
+DEFAULT_VERTEX_BUDGET = 50_000
+
+_AXIS_INDEX = {"X": 0, "Y": 1, "Z": 2}
 
 
 def object_center_world(obj) -> Vector:
@@ -21,8 +27,49 @@ def screen_to_world(region, rv3d, mouse_xy, depth_location) -> Vector:
 
 
 def world_delta_to_local(obj, world_delta: Vector) -> Vector:
-    """Convert a world-space translation delta to object-local space."""
+    """Convert a world-space translation delta to object-local (mesh) space."""
     return obj.matrix_world.inverted_safe().to_3x3() @ world_delta
+
+
+def world_to_location_matrix(obj) -> Matrix:
+    """Return the 3x3 matrix mapping a world-space translation delta to a
+    delta of ``obj.location``.
+
+    ``obj.location`` is expressed in the parent space (parent matrix combined
+    with ``matrix_parent_inverse``), not in world space, so writing a world
+    coordinate into it directly makes parented objects jump.
+    """
+    if obj.parent is None:
+        return Matrix.Identity(3)
+    if obj.parent_type == "OBJECT":
+        parent_space = obj.parent.matrix_world @ obj.matrix_parent_inverse
+    else:
+        # Bone / vertex parents: derive the parent space from the evaluated result.
+        parent_space = obj.matrix_world @ obj.matrix_basis.inverted_safe()
+    return parent_space.to_3x3().inverted_safe()
+
+
+def constraint_axes(mode: "str | None") -> frozenset:
+    """Axes along which movement is allowed for a constraint mode.
+
+    ``None`` = free; ``"X"``/``"Y"``/``"Z"`` = single axis;
+    ``"YZ"``/``"XZ"``/``"XY"`` = plane.
+    """
+    if not mode:
+        return frozenset(_AXIS_INDEX)
+    return frozenset(mode)
+
+
+def apply_constraint(movement: Vector, mode: "str | None") -> Vector:
+    """Zero-out the movement components blocked by the constraint *mode*."""
+    m = movement.copy()
+    if not mode:
+        return m
+    allowed = constraint_axes(mode)
+    for axis, idx in _AXIS_INDEX.items():
+        if axis not in allowed:
+            m[idx] = 0.0
+    return m
 
 
 def clamp01(value: float) -> float:

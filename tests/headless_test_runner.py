@@ -12,9 +12,11 @@ import sys
 import time
 import traceback
 from contextlib import contextmanager
+from types import SimpleNamespace
 
 import bmesh
 import bpy
+from mathutils import Matrix, Vector
 
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,25 +24,15 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 import src  # noqa: E402
-from src import detector  # noqa: E402
+from src import detector, utils  # noqa: E402
 
 
 def _ensure_addon_enabled():
-    # Register by import path if needed.
+    # Register by import path (the addon is not installed in this Blender).
+    # Preferences stay unavailable, so code falls back to its defaults and
+    # tests control the budget through _temporary_budget().
     if not hasattr(bpy.types.Scene, "target_scope"):
-        try:
-            src.register()
-        except ValueError:
-            # Already registered in this process.
-            pass
-
-    # Try creating AddonPreferences entry to allow budget override through prefs.
-    if "src" not in bpy.context.preferences.addons:
-        try:
-            bpy.ops.preferences.addon_enable(module="src")
-        except Exception:
-            # Not fatal; tests can still run via monkeypatch fallback.
-            pass
+        src.register()
 
 
 def _clear_scene():
@@ -113,23 +105,10 @@ def _ordered_unique_obj_names(build_result):
     return order
 
 
-def _get_addon_prefs():
-    addon = bpy.context.preferences.addons.get("src")
-    return addon.preferences if addon else None
-
-
 @contextmanager
 def _temporary_budget(max_vertex_budget):
-    prefs = _get_addon_prefs()
-    if prefs is not None:
-        old_value = prefs.max_vertex_budget
-        prefs.max_vertex_budget = int(max_vertex_budget)
-        try:
-            yield
-        finally:
-            prefs.max_vertex_budget = old_value
-        return
-
+    # Always monkeypatch: the real preference clamps to >= 100, which would
+    # silently change what the small-budget cases test.
     original_fn = detector.get_addon_prefs
 
     class _DummyPrefs:
@@ -162,11 +141,19 @@ def case_scope_self():
     scene.target_scope = "SELF"
 
     with _temporary_budget(100000):
-        result = detector.build_spatial_tree(bpy.context, active_obj=a)
+        # Object Mode: the whole active object moves -> nothing to snap to.
+        obj_mode = detector.build_spatial_tree(bpy.context, active_obj=a)
+        # Edit Mode: only the moving vertices are excluded.
+        edit_mode = detector.build_spatial_tree(bpy.context, active_obj=a,
+                                                moving_vert_indices={0, 1})
 
-    assert result.point_count == len(a.data.vertices)
-    assert all(meta.obj_name == "Self_A" for meta in result.point_meta)
-    assert not result.limit_exceeded
+    assert obj_mode.point_count == 0
+    assert obj_mode.tree is None
+
+    assert edit_mode.point_count == len(a.data.vertices)
+    assert all(meta.obj_name == "Self_A" for meta in edit_mode.point_meta)
+    assert edit_mode.exclude_indices == {0, 1}
+    assert not edit_mode.limit_exceeded
 
 
 def case_scope_selected():
@@ -204,8 +191,9 @@ def case_scope_visible_distance_sort():
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
 
     order = _ordered_unique_obj_names(result)
-    assert order[:3] == ["Vis_Active", "Vis_Near", "Vis_Far"]
-    assert result.point_count == 24
+    # Active object is skipped in Object Mode (it would always be excluded).
+    assert order == ["Vis_Near", "Vis_Far"]
+    assert result.point_count == 16
     assert not result.limit_exceeded
 
 
@@ -219,13 +207,15 @@ def case_budget_fallback_with_cubes():
     scene = bpy.context.scene
     scene.target_scope = "VISIBLE"
 
-    # Cube has 8 vertices; budget 8 forces all but first processed object to BOUNDS mode.
+    # Cube has 8 vertices; budget 8 fits exactly the nearest target (B),
+    # leaving nothing for C, which falls back to BOUNDS only.
     with _temporary_budget(8):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
 
     assert result.limit_exceeded
-    assert len(result.bounds_objects) >= 1
-    assert "Budget_B" in result.bounds_objects or "Budget_C" in result.bounds_objects
+    assert result.bounds_objects == ["Budget_C"]
+    assert result.partial_objects == []
+    assert result.source_vertex_count == 8
 
     per_obj_types = {}
     for m in result.point_meta:
@@ -278,9 +268,233 @@ def case_stress_100k_vertices():
 
     assert len(heavy.data.vertices) >= 100000
     assert result.limit_exceeded
-    assert "Stress_Heavy" in result.bounds_objects
-    assert result.point_count < 1000
-    print(f"[src:test] stress build elapsed: {elapsed:.4f}s")
+    # The heavy mesh is down-sampled to fill the budget (plus its 9 bounds points).
+    assert result.partial_objects == ["Stress_Heavy"]
+    assert result.bounds_objects == []
+    assert 0 < result.source_vertex_count <= 50000
+    assert result.point_count == result.source_vertex_count + 9
+    types = {m.point_type for m in result.point_meta}
+    assert types == {"POINT", "BOUNDS"}
+    print(f"[src:test] stress build elapsed: {elapsed:.4f}s "
+          f"(tree points: {result.point_count})")
+
+
+def case_budget_partial_fill():
+    _clear_scene()
+    active = _add_cube("Part_Active", (0.0, 0.0, 0.0))
+    _add_cube("Part_Cube", (3.0, 0.0, 0.0))                        # 8 verts, nearest
+    _create_grid_object("Part_Grid", (8.0, 0.0, 0.0), 20, 20)       # 400 verts
+    _add_cube("Part_Far", (30.0, 0.0, 0.0))                         # 8 verts, farthest
+    _select_only(active)
+    bpy.context.scene.target_scope = "VISIBLE"
+
+    with _temporary_budget(108):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+
+    # Cube fits (8); the grid crossing the limit is sampled into the remaining
+    # 100 slots instead of collapsing to its box; the far cube gets bounds only.
+    assert result.limit_exceeded
+    assert result.partial_objects == ["Part_Grid"]
+    assert result.bounds_objects == ["Part_Far"]
+    assert result.source_vertex_count <= 108
+    grid_points = [m for m in result.point_meta
+                   if m.obj_name == "Part_Grid" and m.point_type == "POINT"]
+    assert 50 <= len(grid_points) <= 100, len(grid_points)
+
+
+def case_scope_collection_recursive():
+    _clear_scene()
+    active = _add_cube("Rec_Active", (0.0, 0.0, 0.0))
+    top_obj = _add_cube("Rec_Top", (2.0, 0.0, 0.0))
+    child_obj = _add_cube("Rec_Child", (4.0, 0.0, 0.0))
+    _select_only(active)
+
+    parent = _new_collection("SC_Rec_Parent")
+    child = bpy.data.collections.new("SC_Rec_Child")
+    parent.children.link(child)
+    _link_to_collection(top_obj, parent)
+    _link_to_collection(child_obj, child)
+
+    scene = bpy.context.scene
+    scene.target_scope = "COLLECTION"
+    scene.target_collection = parent
+
+    with _temporary_budget(100000):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+
+    assert {m.obj_name for m in result.point_meta} == {"Rec_Top", "Rec_Child"}
+
+
+def case_edit_mode_sync():
+    _clear_scene()
+    obj = _add_cube("Edit_Sync", (1.0, 2.0, 3.0))
+    _select_only(obj)
+    bpy.context.scene.target_scope = "SELF"
+
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.verts.new((5.0, 0.0, 0.0))
+        bm.verts.ensure_lookup_table()
+        new_index = len(bm.verts) - 1
+        bmesh.update_edit_mesh(obj.data)
+        # obj.data.vertices is stale until the edit mesh is flushed
+        assert len(obj.data.vertices) == 8
+
+        with _temporary_budget(100000):
+            result = detector.build_spatial_tree(
+                bpy.context, active_obj=obj, moving_vert_indices={new_index},
+            )
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+    assert result.point_count == 9
+    (excluded,) = result.exclude_indices
+    expected = obj.matrix_world @ Vector((5.0, 0.0, 0.0))
+    assert (result.points[excluded] - expected).length < 1e-5
+
+
+def case_parent_space_delta():
+    _clear_scene()
+    parent = _add_cube("PS_Parent", (5.0, -2.0, 1.0))
+    parent.rotation_euler = (0.3, 0.0, 1.2)
+    parent.scale = (2.0, 0.5, 1.5)
+    child = _add_cube("PS_Child", (1.0, 1.0, 1.0))
+    bpy.context.view_layer.update()
+    # Parent like Ctrl+P (keep transform): sets matrix_parent_inverse.
+    child.parent = parent
+    child.matrix_parent_inverse = parent.matrix_world.inverted()
+    # Transform the parent afterwards; until then the parent space is the
+    # identity and `location` coincides with the world position.
+    parent.location = (6.0, -1.0, 2.0)
+    parent.rotation_euler = (0.3, 0.2, 2.0)
+    parent.scale = (1.5, 0.8, 1.2)
+    bpy.context.view_layer.update()
+
+    start_loc = child.location.copy()
+    start_world = child.matrix_world.translation.copy()
+    to_loc = utils.world_to_location_matrix(child)
+
+    # Zero movement must not move the object (the old code jumped here,
+    # because it wrote the world position into the parent-space location).
+    child.location = start_loc + to_loc @ Vector((0.0, 0.0, 0.0))
+    bpy.context.view_layer.update()
+    assert (child.matrix_world.translation - start_world).length < 1e-5
+
+    delta = Vector((0.7, -1.3, 2.1))
+    child.location = start_loc + to_loc @ delta
+    bpy.context.view_layer.update()
+    moved = child.matrix_world.translation - start_world
+    assert (moved - delta).length < 1e-4, (moved, delta)
+
+    # Unparented: identity
+    assert utils.world_to_location_matrix(parent) == Matrix.Identity(3)
+
+
+def case_constraint_helpers():
+    v = Vector((1.0, 2.0, 3.0))
+    assert tuple(utils.apply_constraint(v, None)) == (1.0, 2.0, 3.0)
+    assert tuple(utils.apply_constraint(v, "X")) == (1.0, 0.0, 0.0)
+    assert tuple(utils.apply_constraint(v, "Z")) == (0.0, 0.0, 3.0)
+    assert tuple(utils.apply_constraint(v, "YZ")) == (0.0, 2.0, 3.0)
+    assert tuple(utils.apply_constraint(v, "XY")) == (1.0, 2.0, 0.0)
+    assert utils.constraint_axes(None) == {"X", "Y", "Z"}
+    assert utils.constraint_axes("XZ") == {"X", "Z"}
+
+
+# --- Synthetic top-ortho view: 50 px per world unit, origin at (500, 500) ---
+
+def _top_view():
+    region = SimpleNamespace(width=1000, height=1000)
+    rv3d = SimpleNamespace(
+        perspective_matrix=Matrix.Diagonal((0.1, 0.1, -0.01, 1.0)),
+        view_matrix=Matrix.Identity(4),  # looking down -Z
+    )
+    return region, rv3d
+
+
+def _build_from_points(coords, names=None, exclude=()):
+    points = [Vector(c) for c in coords]
+    names = names or [f"P{i}" for i in range(len(points))]
+    tree = detector.kdtree.KDTree(len(points))
+    for i, co in enumerate(points):
+        tree.insert(co, i)
+    tree.balance()
+    return detector.BuildResult(
+        tree=tree,
+        point_meta=[detector._PointMeta(obj_name=n, point_type="POINT") for n in names],
+        point_count=len(points),
+        points=points,
+        axis_x=sorted((co.x, i) for i, co in enumerate(points)),
+        axis_y=sorted((co.y, i) for i, co in enumerate(points)),
+        axis_z=sorted((co.z, i) for i, co in enumerate(points)),
+        exclude_indices=set(exclude),
+    )
+
+
+def case_axis_align_screen_gate():
+    region, rv3d = _top_view()
+    current = Vector((0.0, 0.0, 0.0))
+    mouse = utils.world_to_screen(region, rv3d, current)
+    build = _build_from_points([
+        (0.2, 5.0, 0.0),    # x within 10 px  -> candidate
+        (0.2, -1.0, 0.0),   # same x, closer reference -> preferred reference
+        (10.0, 3.0, 0.0),   # x 500 px away   -> rejected by the pixel gate
+        (0.0, 0.0, 4.0),    # z alignment     -> Z points into the screen
+    ])
+
+    cands = detector.find_axis_candidates(
+        build, current, region, rv3d, mouse, snap_distance_px=30, axis_flags={"X"},
+    )
+    xs = sorted(round(c.location.x, 4) for c in cands)
+    assert xs == [0.0, 0.2], xs
+    best_02 = next(c for c in cands if abs(c.location.x - 0.2) < 1e-6)
+    assert (best_02.reference_co - Vector((0.2, -1.0, 0.0))).length < 1e-6
+    assert abs(best_02.screen_dist - 10.0) < 1e-3
+
+    # Axis parallel to the view direction is skipped entirely.
+    assert detector.find_axis_candidates(
+        build, current, region, rv3d, mouse, snap_distance_px=30, axis_flags={"Z"},
+    ) == []
+
+    # A tighter gate rejects the 10 px candidate.
+    cands = detector.find_axis_candidates(
+        build, current, region, rv3d, mouse, snap_distance_px=5, axis_flags={"X"},
+    )
+    assert [round(c.location.x, 4) for c in cands] == [0.0]
+
+
+def case_axis_align_nearest_in_dense_data():
+    region, rv3d = _top_view()
+    current = Vector((0.0, 0.0, 0.0))
+    mouse = utils.world_to_screen(region, rv3d, current)
+    # ~8k values in [-40, -1] used to fill the old fixed 5000-entry scan
+    # window (which started at the low end) before 0.1 was reached.
+    coords = [(-40.0 + i * 0.0049, 7.0, 0.0) for i in range(7960)]
+    coords.append((0.1, 2.0, 0.0))
+    build = _build_from_points(coords)
+
+    cands = detector.find_axis_candidates(
+        build, current, region, rv3d, mouse, snap_distance_px=30, axis_flags={"X"},
+    )
+    assert cands, "nearby alignment value not found"
+    assert abs(cands[0].location.x - 0.1) < 1e-6
+
+
+def case_find_candidates_hit_cap_skips_excluded():
+    region, rv3d = _top_view()
+    current = Vector((0.0, 0.0, 0.0))
+    mouse = utils.world_to_screen(region, rv3d, current)
+    near = [(0.001 * i, 0.0, 0.0) for i in range(200)]   # excluded (moving verts)
+    coords = near + [(0.3, 0.0, 0.0), (0.0, 4.0, 0.0)]
+    build = _build_from_points(coords, exclude=range(200))
+
+    cands = detector.find_candidates(
+        build, current, region, rv3d, mouse,
+        snap_distance_px=30, query_radius=10.0, max_hits=8,
+    )
+    assert len(cands) == 1  # (0,4,0) is 200 px away
+    assert (cands[0].location - Vector((0.3, 0.0, 0.0))).length < 1e-6
 
 
 CASES = {
@@ -291,6 +505,14 @@ CASES = {
     "budget_fallback": case_budget_fallback_with_cubes,
     "scope_collection": case_scope_collection,
     "stress_100k": case_stress_100k_vertices,
+    "budget_partial": case_budget_partial_fill,
+    "scope_collection_recursive": case_scope_collection_recursive,
+    "edit_mode_sync": case_edit_mode_sync,
+    "parent_space_delta": case_parent_space_delta,
+    "constraint_helpers": case_constraint_helpers,
+    "axis_align_gate": case_axis_align_screen_gate,
+    "axis_align_dense": case_axis_align_nearest_in_dense_data,
+    "find_hit_cap": case_find_candidates_hit_cap_skips_excluded,
 }
 
 

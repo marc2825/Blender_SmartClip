@@ -1,9 +1,26 @@
 """GPU overlay drawing for guide lines, snap points, and the HUD."""
 
 import blf
+import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
+
+
+# Half-length of the "infinite-looking" constraint guide lines.
+_CONSTRAINT_HALF_LEN = 50.0
+_AXIS_COLORS = {
+    "X": (1.0, 0.2, 0.2, 0.45),
+    "Y": (0.2, 1.0, 0.2, 0.45),
+    "Z": (0.3, 0.3, 1.0, 0.45),
+}
+_AXIS_VECTORS = {
+    "X": Vector((1.0, 0.0, 0.0)),
+    "Y": Vector((0.0, 1.0, 0.0)),
+    "Z": Vector((0.0, 0.0, 1.0)),
+}
+# Cap on dash segments per dashed line (long lines get longer dashes).
+_MAX_DASHES = 200
 
 
 # ------------------------------------------------------------------
@@ -16,6 +33,9 @@ def _dashed_line_points(start, end, dash=0.06, gap=0.04):
     length = d.length
     if length < 1e-6:
         return []
+    scale = max(1.0, length / ((dash + gap) * _MAX_DASHES))
+    dash *= scale
+    gap *= scale
     n = d / length
     pts = []
     t = 0.0
@@ -28,25 +48,72 @@ def _dashed_line_points(start, end, dash=0.06, gap=0.04):
     return pts
 
 
+def _constraint_guides(constraint, origin):
+    """Return [(axis, [p0, p1]), ...] guide lines for an axis / plane constraint."""
+    if not constraint or origin is None:
+        return []
+    guides = []
+    for axis in constraint:  # "X" -> one line, "YZ" -> two lines
+        vec = _AXIS_VECTORS.get(axis)
+        if vec is None:
+            continue
+        offset = vec * _CONSTRAINT_HALF_LEN
+        guides.append((axis, [origin - offset, origin + offset]))
+    return guides
+
+
+def _draw_lines(coords, color, width):
+    if not coords:
+        return
+    # POLYLINE_* honours lineWidth on every GPU backend; gpu.state.line_width_set
+    # is ignored for widths > 1 on Metal / Vulkan.
+    shader = gpu.shader.from_builtin("POLYLINE_UNIFORM_COLOR")
+    batch = batch_for_shader(shader, "LINES", {"pos": coords})
+    shader.bind()
+    viewport = gpu.state.viewport_get()
+    shader.uniform_float("viewportSize", (viewport[2], viewport[3]))
+    shader.uniform_float("lineWidth", width)
+    shader.uniform_float("color", color)
+    batch.draw(shader)
+
+
+def _draw_points(coords, color, size):
+    if not coords:
+        return
+    shader = gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
+    batch = batch_for_shader(shader, "POINTS", {"pos": coords})
+    shader.bind()
+    shader.uniform_float("color", color)
+    gpu.state.point_size_set(size)
+    batch.draw(shader)
+    gpu.state.point_size_set(1.0)
+
+
 # ------------------------------------------------------------------
 # 3-D overlay (POST_VIEW)
 # ------------------------------------------------------------------
 
 def draw_3d(op, _context):
     """Draw guide lines and snap point markers in world space."""
-    if not getattr(op, "draw_enabled", False):
+    try:
+        if not op.draw_enabled:
+            return
+        _draw_3d(op)
+    except ReferenceError:
+        # Operator already freed (e.g. aborted without cleanup): draw nothing.
         return
 
+
+def _draw_3d(op):
     color = op.color_snap if op.hard_snap else op.color_guide
-    shader = gpu.shader.from_builtin("UNIFORM_COLOR")
 
     lines = []
     dashes = []
     pts = []
 
-    free = getattr(op, "free_world", None)
-    applied = getattr(op, "applied_world", None)
-    cand = getattr(op, "current_candidate", None)
+    free = op.free_world
+    applied = op.applied_world
+    cand = op.current_candidate
 
     if cand:
         if cand.type.startswith("ALIGN_"):
@@ -69,64 +136,19 @@ def draw_3d(op, _context):
         if free and applied:
             lines.extend([free, applied])
 
-    # Axis / plane constraint indicator line through the current position
-    constraint = getattr(op, "constraint_mode", None)
-    constraint_lines = []
-    if constraint and applied:
-        _CLEN = 50.0  # half-length of the infinite-looking constraint line
-        if constraint == "X":
-            constraint_lines = [applied - Vector((_CLEN, 0, 0)), applied + Vector((_CLEN, 0, 0))]
-        elif constraint == "Y":
-            constraint_lines = [applied - Vector((0, _CLEN, 0)), applied + Vector((0, _CLEN, 0))]
-        elif constraint == "Z":
-            constraint_lines = [applied - Vector((0, 0, _CLEN)), applied + Vector((0, 0, _CLEN))]
-
     gpu.state.blend_set("ALPHA")
     gpu.state.depth_test_set("NONE")
+    try:
+        # Constraint axis lines (subtle, behind other overlays)
+        for axis, coords in _constraint_guides(op.constraint_mode, applied):
+            _draw_lines(coords, _AXIS_COLORS[axis], 1.5)
 
-    # Constraint axis line (subtle, behind other overlays)
-    if constraint_lines:
-        _axis_colors = {
-            "X": (1.0, 0.2, 0.2, 0.45),
-            "Y": (0.2, 1.0, 0.2, 0.45),
-            "Z": (0.3, 0.3, 1.0, 0.45),
-        }
-        c_color = _axis_colors.get(constraint, (*color[:3], 0.35))
-        batch = batch_for_shader(shader, "LINES", {"pos": constraint_lines})
-        shader.bind()
-        shader.uniform_float("color", c_color)
-        gpu.state.line_width_set(1.5)
-        batch.draw(shader)
-
-    # Solid lines
-    if lines:
-        batch = batch_for_shader(shader, "LINES", {"pos": lines})
-        shader.bind()
-        shader.uniform_float("color", color)
-        gpu.state.line_width_set(2.0)
-        batch.draw(shader)
-
-    # Dashed lines (thinner)
-    if dashes:
-        batch = batch_for_shader(shader, "LINES", {"pos": dashes})
-        shader.bind()
-        shader.uniform_float("color", (*color[:3], color[3] * 0.7))
-        gpu.state.line_width_set(1.5)
-        batch.draw(shader)
-
-    # Points: snap target + reference vertex
-    if pts:
-        batch = batch_for_shader(shader, "POINTS", {"pos": pts})
-        shader.bind()
-        shader.uniform_float("color", color)
-        gpu.state.point_size_set(8.0)
-        batch.draw(shader)
-
-    # Restore defaults
-    gpu.state.point_size_set(1.0)
-    gpu.state.line_width_set(1.0)
-    gpu.state.depth_test_set("LESS_EQUAL")
-    gpu.state.blend_set("NONE")
+        _draw_lines(lines, color, 2.0)
+        _draw_lines(dashes, (*color[:3], color[3] * 0.7), 1.5)
+        _draw_points(pts, color, 8.0)
+    finally:
+        gpu.state.depth_test_set("LESS_EQUAL")
+        gpu.state.blend_set("NONE")
 
 
 # ------------------------------------------------------------------
@@ -135,17 +157,19 @@ def draw_3d(op, _context):
 
 def draw_2d(op, _context):
     """Draw the lower-left HUD text."""
-    if not getattr(op, "draw_enabled", False):
+    try:
+        if not op.draw_enabled:
+            return
+        text = op.hud_text
+        color = op.color_snap if op.hard_snap else op.color_guide
+    except ReferenceError:
         return
-
-    text = getattr(op, "hud_text", "")
     if not text:
         return
 
-    color = op.color_snap if op.hard_snap else op.color_guide
+    scale = bpy.context.preferences.system.ui_scale
     font_id = 0
-
-    blf.position(font_id, 20, 20, 0)
-    blf.size(font_id, 14.0)
+    blf.position(font_id, 20 * scale, 20 * scale, 0)
+    blf.size(font_id, 14.0 * scale)
     blf.color(font_id, color[0], color[1], color[2], color[3])
     blf.draw(font_id, text)

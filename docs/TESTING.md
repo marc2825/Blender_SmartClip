@@ -14,6 +14,20 @@ Run one case:
 blender --background --factory-startup --python tests/headless_test_runner.py -- --case stress_100k
 ```
 
+## Automated UI (opens a window)
+
+Drives the modal operator with simulated input events (needs a display):
+
+```powershell
+blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
+```
+
+## Version consistency
+
+```powershell
+python scripts/versioning.py
+```
+
 ## Manual (Interactive UI)
 
 Prepare a validation scene:

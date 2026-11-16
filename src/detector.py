@@ -1,8 +1,10 @@
 """KD-Tree construction (build) and nearest-neighbour query (find) logic.
 
 The tree is built once at invoke time and stays static for the entire modal
-session.  A vertex budget controls how many raw vertices are inserted; objects
-that would blow the budget fall back to bounding-box corners + origin.
+session.  A vertex budget controls how many raw vertices are inserted.  An
+object that does not fit into the remaining budget is down-sampled to fill
+what is left, and every over-budget object also contributes its bounding-box
+corners + origin so it stays reachable.
 """
 
 import bisect
@@ -12,7 +14,21 @@ from typing import List, Optional
 from mathutils import Vector, kdtree
 
 from .prefs import get_addon_prefs
-from .utils import object_center_world, world_to_screen
+from .utils import (
+    DEFAULT_SNAP_DISTANCE_PX,
+    DEFAULT_VERTEX_BUDGET,
+    object_center_world,
+    world_to_screen,
+)
+
+# Upper bound on how many tree hits are projected to screen per query.
+MAX_QUERY_HITS = 512
+# Upper bound on sorted-axis entries scanned per direction in axis-align mode.
+MAX_AXIS_SCAN = 20_000
+# |view direction . axis| above this means the axis points (almost) straight
+# into the screen: alignment along it is invisible and cannot be steered by
+# the mouse, so it is skipped.
+VIEW_PARALLEL_LIMIT = 0.98
 
 
 # ---------------------------------------------------------------------------
@@ -50,13 +66,18 @@ class BuildResult:
     point_count: int = 0
     source_vertex_count: int = 0
     limit_exceeded: bool = False
+    # Objects represented only by bounding-box corners + origin
     bounds_objects: List[str] = field(default_factory=list)
+    # Objects whose vertices were down-sampled to fit the budget
+    # (they also carry bounding-box corners + origin)
+    partial_objects: List[str] = field(default_factory=list)
     # Stored points + sorted axis arrays for axis-clipping mode
     points: list = field(default_factory=list)
     axis_x: list = field(default_factory=list)  # [(x_val, point_idx), ...]
     axis_y: list = field(default_factory=list)
     axis_z: list = field(default_factory=list)
-    # Point indices belonging to the active object (excluded from snap)
+    # Point indices that must never be returned as snap targets
+    # (the moving vertices in Edit Mode)
     exclude_indices: set = field(default_factory=set)
 
 
@@ -83,11 +104,23 @@ def _collect_scope_objects(context, active_obj):
     if scope == "COLLECTION":
         coll = scene.target_collection
         if coll:
-            return [obj for obj in coll.objects if obj.type == "MESH"]
+            # all_objects includes objects of nested child collections
+            return [obj for obj in coll.all_objects if obj.type == "MESH"]
         return []
 
     # VISIBLE (default)
     return [obj for obj in context.visible_objects if obj.type == "MESH"]
+
+
+def _sync_edit_meshes(objects):
+    """Flush pending Edit Mode changes so ``mesh.vertices`` is current.
+
+    While an object is in Edit Mode its live geometry is in a BMesh and
+    ``obj.data.vertices`` keeps the state from the last mode switch.
+    """
+    for obj in objects:
+        if obj.mode == "EDIT":
+            obj.update_from_editmode()
 
 
 # ---------------------------------------------------------------------------
@@ -99,20 +132,26 @@ def build_spatial_tree(context, active_obj=None,
     """Build a static KD-Tree of snap reference points.
 
     Objects are sorted by distance from *active_obj* (nearest first).  Vertices
-    are inserted until the budget is exhausted; remaining objects contribute
-    only their bounding-box corners and origin.
+    are inserted until the budget is exhausted: the object that crosses the
+    limit is down-sampled to fill the remaining budget, later objects only get
+    their bounding-box corners and origin.
 
-    *moving_vert_indices*: if provided (Edit Mode), only these mesh vertex
-    indices of *active_obj* are excluded from snap candidates.  If ``None``
-    (Object Mode), **all** vertices of *active_obj* are excluded.
+    *moving_vert_indices*: Edit Mode - the mesh vertex indices of
+    *active_obj* that are being moved; only these are excluded from snap
+    candidates.  ``None`` means Object Mode - the whole *active_obj* moves,
+    so it is not inserted at all (and does not consume budget).
     """
     active_obj = active_obj or context.active_object
     prefs = get_addon_prefs(context)
-    budget = prefs.max_vertex_budget if prefs else 50_000
+    budget = prefs.max_vertex_budget if prefs else DEFAULT_VERTEX_BUDGET
 
     candidates = _collect_scope_objects(context, active_obj)
+    if moving_vert_indices is None and active_obj is not None:
+        candidates = [obj for obj in candidates if obj is not active_obj]
     if not candidates:
         return BuildResult()
+
+    _sync_edit_meshes(candidates)
 
     # Distance sort: nearest objects get full vertex data.
     active_center = object_center_world(active_obj) if active_obj else object_center_world(candidates[0])
@@ -124,45 +163,46 @@ def build_spatial_tree(context, active_obj=None,
     total_verts = 0
     limit_exceeded = False
     bounds_objects: list[str] = []
+    partial_objects: list[str] = []
 
     for obj in candidates:
         mesh = obj.data
-        vert_count = len(mesh.vertices)
+        verts = mesh.vertices
+        vert_count = len(verts)
         mw = obj.matrix_world
-        is_active = obj is active_obj
+        moving = moving_vert_indices if obj is active_obj else None
+        remaining = budget - total_verts
 
-        if total_verts + vert_count <= budget:
-            # Full vertex insertion
-            start_idx = len(points)
-            for v in mesh.vertices:
-                points.append(mw @ v.co)
-                meta.append(_PointMeta(obj_name=obj.name, point_type="POINT"))
-            if is_active:
-                if moving_vert_indices is not None:
-                    # Edit Mode: only exclude the selected (moving) vertices
-                    for vi in moving_vert_indices:
-                        exclude_indices.add(start_idx + vi)
-                else:
-                    # Object Mode: exclude all vertices of the active object
-                    exclude_indices.update(range(start_idx, len(points)))
-            total_verts += vert_count
+        if vert_count <= remaining:
+            indices = range(vert_count)
         else:
-            # Fallback: bounding-box 8 corners + origin
             limit_exceeded = True
-            bounds_objects.append(obj.name)
-            start_idx = len(points)
+            if remaining > 0:
+                step = -(-vert_count // remaining)  # ceil division
+                indices = range(0, vert_count, step)
+                partial_objects.append(obj.name)
+            else:
+                indices = range(0)
+                bounds_objects.append(obj.name)
+
+        for vi in indices:
+            if moving and vi in moving:
+                exclude_indices.add(len(points))
+            points.append(mw @ verts[vi].co)
+            meta.append(_PointMeta(obj_name=obj.name, point_type="POINT"))
+        total_verts += len(indices)
+
+        if len(indices) < vert_count:
+            # Over budget: keep the object reachable through its bounds
             for corner in obj.bound_box:
                 points.append(mw @ Vector(corner))
                 meta.append(_PointMeta(obj_name=obj.name, point_type="BOUNDS"))
             points.append(mw.translation.copy())
             meta.append(_PointMeta(obj_name=obj.name, point_type="BOUNDS"))
-            if is_active and moving_vert_indices is None:
-                # Object Mode: exclude bounding box points too
-                exclude_indices.update(range(start_idx, len(points)))
 
     if not points:
         return BuildResult(source_vertex_count=total_verts, limit_exceeded=limit_exceeded,
-                           bounds_objects=bounds_objects)
+                           bounds_objects=bounds_objects, partial_objects=partial_objects)
 
     tree = kdtree.KDTree(len(points))
     for i, co in enumerate(points):
@@ -181,6 +221,7 @@ def build_spatial_tree(context, active_obj=None,
         source_vertex_count=total_verts,
         limit_exceeded=limit_exceeded,
         bounds_objects=bounds_objects,
+        partial_objects=partial_objects,
         points=points,
         axis_x=ax,
         axis_y=ay,
@@ -199,27 +240,33 @@ def find_candidates(
     region,
     rv3d,
     mouse_xy,
-    snap_distance_px: int = 30,
+    snap_distance_px: int = DEFAULT_SNAP_DISTANCE_PX,
     query_radius: float = 7.5,
+    max_hits: int = MAX_QUERY_HITS,
 ) -> List[SnapCandidate]:
     """Search the pre-built tree for snap candidates near *current_co*.
 
     Returns a list sorted by score (best first), containing POINT / BOUNDS
     hits within *query_radius* world units **and** *snap_distance_px* screen
-    pixels.  Points in ``build_result.exclude_indices`` (the active object's
-    own vertices) are skipped.
+    pixels.  Points in ``build_result.exclude_indices`` are skipped.  At most
+    *max_hits* of the nearest remaining hits are projected to screen.
     """
     if not build_result or not build_result.tree:
         return []
 
     exclude = build_result.exclude_indices
     mouse_v = Vector(mouse_xy)
+    # find_range returns hits sorted nearest-first
     raw_hits = build_result.tree.find_range(current_co, query_radius)
     result: list[SnapCandidate] = []
+    projected = 0
 
-    for hit_co, index, _world_dist in raw_hits:
+    for hit_co, index, world_dist in raw_hits:
         if index in exclude:
             continue
+        projected += 1
+        if projected > max_hits:
+            break
 
         screen = world_to_screen(region, rv3d, hit_co)
         if screen is None:
@@ -237,7 +284,7 @@ def find_candidates(
             location=hit_co.copy(),
             reference_co=current_co.copy(),
             screen_dist=screen_dist,
-            score=screen_dist + _world_dist,
+            score=screen_dist + world_dist,
             target_name=pm.obj_name,
         ))
 
@@ -249,88 +296,111 @@ def find_candidates(
 # Axis-clipping query
 # ---------------------------------------------------------------------------
 
+_AXES = {
+    "X": (0, "axis_x", "ALIGN_X"),
+    "Y": (1, "axis_y", "ALIGN_Y"),
+    "Z": (2, "axis_z", "ALIGN_Z"),
+}
+
+
+def _view_direction(rv3d) -> "Vector | None":
+    view_matrix = getattr(rv3d, "view_matrix", None)
+    if view_matrix is None:
+        return None
+    direction = Vector(view_matrix[2][:3])
+    if direction.length < 1e-9:
+        return None
+    return direction.normalized()
+
+
 def find_axis_candidates(
     build_result: BuildResult,
     current_co: Vector,
     region,
     rv3d,
     mouse_xy,
-    snap_distance_px: int = 15,
+    snap_distance_px: int = DEFAULT_SNAP_DISTANCE_PX,
     axis_flags: set = frozenset(),
-    query_radius: float = 2.0,
+    max_scan: int = MAX_AXIS_SCAN,
 ) -> List[SnapCandidate]:
     """Find axis-alignment candidates.
 
-    For each enabled axis, binary-search the sorted axis array for reference
-    vertices whose coordinate on that axis is close to *current_co*.
-    The candidate location keeps the other axes at *current_co*, replacing
-    only the aligned axis with the reference value.  ``reference_co`` stores
-    the full 3-D position of the source vertex (for dashed-line visualisation).
+    For each enabled axis, the sorted axis array is walked outwards from
+    *current_co*'s value.  A candidate location keeps the other axes at
+    *current_co* and replaces only the aligned axis with the reference value;
+    it is accepted while its projection lies within *snap_distance_px* of
+    *mouse_xy* (which should be the projection of *current_co*, so the screen
+    distance grows monotonically as the walk moves away and the walk can stop
+    at the first miss).  ``reference_co`` stores the full 3-D position of the
+    source vertex (for the dashed-line visualisation); among vertices sharing
+    a value the one closest to *current_co* is used.
     """
     if not build_result or not build_result.points or not axis_flags:
         return []
 
     exclude = build_result.exclude_indices
+    points = build_result.points
     mouse_v = Vector(mouse_xy)
-    # Generous world-space threshold so distant axis values are reachable.
-    threshold = max(query_radius * 20, 10.0)
-
-    _axes = {
-        "X": (0, build_result.axis_x, "ALIGN_X"),
-        "Y": (1, build_result.axis_y, "ALIGN_Y"),
-        "Z": (2, build_result.axis_z, "ALIGN_Z"),
-    }
+    view_dir = _view_direction(rv3d)
 
     result: list[SnapCandidate] = []
 
-    for flag in axis_flags:
-        cfg = _axes.get(flag)
+    for flag in sorted(axis_flags):
+        cfg = _AXES.get(flag)
         if not cfg:
             continue
-        axis_idx, sorted_entries, snap_type = cfg
-        if not sorted_entries:
+        axis_idx, attr, snap_type = cfg
+        entries = getattr(build_result, attr)
+        if not entries:
+            continue
+        if view_dir is not None and abs(view_dir[axis_idx]) > VIEW_PARALLEL_LIMIT:
             continue
 
         target_val = current_co[axis_idx]
-        lo = bisect.bisect_left(sorted_entries, (target_val - threshold,))
-        hi = bisect.bisect_right(sorted_entries, (target_val + threshold,))
+        start = bisect.bisect_left(entries, (target_val,))
+        # Best candidate per distinct axis value: {val: (tie_break, candidate)}
+        best: dict = {}
 
-        # Deduplicate: keep the best score per rounded axis value
-        best: dict[float, SnapCandidate] = {}
+        for step in (-1, 1):
+            i = start - 1 if step < 0 else start
+            scanned = 0
+            last_val = None
+            align_co = None
+            screen_dist = 0.0
+            while 0 <= i < len(entries) and scanned < max_scan:
+                val, pt_idx = entries[i]
+                i += step
+                scanned += 1
+                if pt_idx in exclude:
+                    continue
 
-        for i in range(lo, min(hi, lo + 5000)):
-            val, pt_idx = sorted_entries[i]
-            if pt_idx in exclude:
-                continue
-            axis_dist = abs(val - target_val)
+                if val != last_val:
+                    last_val = val
+                    align_co = current_co.copy()
+                    align_co[axis_idx] = val
+                    screen = world_to_screen(region, rv3d, align_co)
+                    if screen is None:
+                        break
+                    screen_dist = (screen - mouse_v).length
+                    if screen_dist > snap_distance_px:
+                        break
 
-            # Alignment point: current position with one axis replaced
-            align_co = current_co.copy()
-            align_co[axis_idx] = val
-
-            # Only reject points behind the camera
-            screen = world_to_screen(region, rv3d, align_co)
-            if screen is None:
-                continue
-            screen_dist = (screen - mouse_v).length
-
-            ref_co = build_result.points[pt_idx]
-            meta = build_result.point_meta[pt_idx]
-
-            rounded = round(val, 3)
-            score = axis_dist * 100.0
-            prev = best.get(rounded)
-            if prev is None or score < prev.score:
-                best[rounded] = SnapCandidate(
+                ref_co = points[pt_idx]
+                tie = (ref_co - current_co).length_squared
+                prev = best.get(val)
+                if prev is not None and prev[0] <= tie:
+                    continue
+                meta = build_result.point_meta[pt_idx]
+                best[val] = (tie, SnapCandidate(
                     type=snap_type,
-                    location=align_co,
+                    location=align_co.copy(),
                     reference_co=ref_co.copy(),
                     screen_dist=screen_dist,
-                    score=score,
+                    score=screen_dist + abs(val - target_val),
                     target_name=meta.obj_name,
-                )
+                ))
 
-        result.extend(best.values())
+        result.extend(cand for _tie, cand in best.values())
 
     result.sort(key=lambda c: c.score)
     return result
