@@ -1,19 +1,29 @@
 bl_info = {
     "name": "Smart Clipping",
     "author": "marc2825",
-    "version": (1, 1, 0),
+    "version": (2, 0, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Smart Clipping",
-    "description": "Static KD-Tree based move snapping with vertex budget control",
+    "description": "Move with smart guides: KD-Tree snapping, axis align and constraints",
+    "doc_url": "https://github.com/marc2825/Blender_SmartClip",
+    "tracker_url": "https://github.com/marc2825/Blender_SmartClip/issues",
     "category": "3D View",
 }
 
 import bpy
+from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, PointerProperty, StringProperty
 
 from .ops import SMARTCLIP_OT_modal_move, remove_all_draw_handlers
 from .prefs import SMARTCLIP_AddonPreferences, get_addon_prefs
 from .utils import DEFAULT_VERTEX_BUDGET
+
+_SCOPE_ITEMS = [
+    ("SELF", "Self Only", "Snap only inside the active mesh"),
+    ("SELECTED", "Selected", "Snap to other selected mesh objects"),
+    ("VISIBLE", "All Visible", "Snap to all visible meshes (budget-controlled)"),
+    ("COLLECTION", "Manual Collection", "Snap only to a specific collection (incl. child collections)"),
+]
 
 
 # ======================================================================
@@ -36,10 +46,10 @@ class SMARTCLIP_PT_panel(bpy.types.Panel):
 
         col = layout.column(align=True)
         col.label(text="Target Scope:")
-        col.prop(scene, "target_scope", text="")
-        if scene.target_scope == "COLLECTION":
+        col.prop(scene, "smartclip_target_scope", text="")
+        if scene.smartclip_target_scope == "COLLECTION":
             col.separator()
-            col.prop(scene, "target_collection", text="Collection")
+            col.prop(scene, "smartclip_target_collection", text="Collection")
 
         layout.separator()
         box = layout.box()
@@ -66,9 +76,11 @@ class SMARTCLIP_PT_panel(bpy.types.Panel):
 # ======================================================================
 # Keymap management
 # ======================================================================
+# The addon's Shift+G items are added at the head of their keymaps, so they
+# take precedence over the built-in Shift+G (Select Grouped / Select Similar)
+# while active and leave it untouched otherwise.
 
 _addon_keymaps: list = []    # [(km, kmi), ...]
-_overridden_kmis: list = []  # built-in Shift+G items we temporarily disabled
 
 
 def _register_keymaps():
@@ -97,75 +109,86 @@ def _register_keymaps():
 
 
 def _unregister_keymaps():
-    _restore_builtin_shift_g()
     for km, kmi in _addon_keymaps:
-        km.keymap_items.remove(kmi)
+        try:
+            km.keymap_items.remove(kmi)
+        except (ReferenceError, RuntimeError):
+            pass
     _addon_keymaps.clear()
 
 
-# ------------------------------------------------------------------
-# Built-in Shift+G override
-# ------------------------------------------------------------------
-
-def _override_builtin_shift_g():
-    """Disable built-in Shift+G items so the addon takes priority."""
-    wm = getattr(bpy.context, "window_manager", None)
-    if not wm:
-        return
-
-    our_idname = SMARTCLIP_OT_modal_move.bl_idname
-    seen = set()
-
-    for kc in (wm.keyconfigs.active, wm.keyconfigs.default):
-        if not kc:
-            continue
-        for km_name in ("Object Mode", "Mesh"):
-            km = kc.keymaps.get(km_name)
-            if not km:
-                continue
-            for kmi in km.keymap_items:
-                if id(kmi) in seen:
-                    continue
-                seen.add(id(kmi))
-                if (kmi.type == "G"
-                        and kmi.value == "PRESS"
-                        and kmi.shift
-                        and not kmi.ctrl
-                        and not kmi.alt
-                        and kmi.idname != our_idname
-                        and kmi.active):
-                    _overridden_kmis.append(kmi)
-                    kmi.active = False
-
-
-def _restore_builtin_shift_g():
-    """Re-enable built-in Shift+G items we previously disabled."""
-    for kmi in _overridden_kmis:
-        try:
-            kmi.active = True
-        except (ReferenceError, RuntimeError):
-            pass
-    _overridden_kmis.clear()
-
-
 def _sync_keymap_state():
-    """Enable/disable addon keymaps and manage built-in conflicts."""
+    """Activate the addon hotkeys only while Smart Clipping is enabled."""
     scene = getattr(bpy.context, "scene", None)
     enabled = getattr(scene, "smartclip_enabled", True) if scene else True
-
     for _km, kmi in _addon_keymaps:
-        kmi.active = enabled
-
-    # When ON:  disable conflicting built-in Shift+G
-    # When OFF: restore built-in Shift+G
-    _restore_builtin_shift_g()
-    if enabled:
-        _override_builtin_shift_g()
+        try:
+            kmi.active = enabled
+        except (ReferenceError, RuntimeError):
+            pass
 
 
 def _on_enabled_update(self, _context):
     """Called when smartclip_enabled changes."""
     _sync_keymap_state()
+
+
+# ======================================================================
+# Scene property migration (1.x -> 2.0)
+# ======================================================================
+# 1.x registered `target_scope` / `target_collection` without a prefix.
+# Their saved values stay in the file as orphan ID properties: in the
+# custom-property storage up to Blender 4.x, in the system-property
+# storage (bl_system_properties_get) from Blender 5.0.
+
+_LEGACY_SCENE_PROPS = {
+    "target_scope": "smartclip_target_scope",
+    "target_collection": "smartclip_target_collection",
+}
+
+
+def _legacy_value(scene, name):
+    getter = getattr(scene, "bl_system_properties_get", None)
+    if getter is not None:
+        group = getter()
+        if group is not None and name in group:
+            return group[name]
+    if name in scene.keys():
+        return scene[name]
+    return None
+
+
+def migrate_legacy_scene_properties():
+    """Copy 1.x scene settings into the prefixed 2.0 properties (once)."""
+    identifiers = [item[0] for item in _SCOPE_ITEMS]
+    for scene in bpy.data.scenes:
+        for old, new in _LEGACY_SCENE_PROPS.items():
+            if scene.is_property_set(new):
+                continue
+            value = _legacy_value(scene, old)
+            if value is None:
+                continue
+            try:
+                if new == "smartclip_target_scope":
+                    if isinstance(value, int) and 0 <= value < len(identifiers):
+                        setattr(scene, new, identifiers[value])
+                elif isinstance(value, bpy.types.Collection):
+                    setattr(scene, new, value)
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+
+@persistent
+def _on_load_post(_dummy):
+    migrate_legacy_scene_properties()
+    _sync_keymap_state()
+
+
+def _deferred_init():
+    # bpy.data is not accessible while add-ons register at startup.
+    migrate_legacy_scene_properties()
+    _sync_keymap_state()
+    return None
 
 
 # ======================================================================
@@ -178,13 +201,14 @@ class SMARTCLIP_OT_add_default_hotkeys(bpy.types.Operator):
     bl_description = "Set Shift+G for Object Mode and Mesh Edit Mode"
 
     def execute(self, _context):
+        if not _addon_keymaps:
+            _register_keymaps()
         for _km, kmi in _addon_keymaps:
             kmi.type = "G"
             kmi.value = "PRESS"
             kmi.shift = True
             kmi.ctrl = False
             kmi.alt = False
-            kmi.active = True
         _sync_keymap_state()
         return {"FINISHED"}
 
@@ -197,7 +221,6 @@ class SMARTCLIP_OT_clear_hotkeys(bpy.types.Operator):
     def execute(self, _context):
         for _km, kmi in _addon_keymaps:
             kmi.active = False
-        _restore_builtin_shift_g()
         return {"FINISHED"}
 
 
@@ -213,6 +236,16 @@ _classes = (
     SMARTCLIP_PT_panel,
 )
 
+_SCENE_PROPS = (
+    "smartclip_enabled",
+    "smartclip_target_scope",
+    "smartclip_target_collection",
+    "smartclip_runtime_info",
+    "smartclip_align_x",
+    "smartclip_align_y",
+    "smartclip_align_z",
+)
+
 
 def register():
     for cls in _classes:
@@ -223,17 +256,12 @@ def register():
         default=True,
         update=_on_enabled_update,
     )
-    bpy.types.Scene.target_scope = EnumProperty(
+    bpy.types.Scene.smartclip_target_scope = EnumProperty(
         name="Target Scope",
-        items=[
-            ("SELF", "Self Only", "Snap only inside the active mesh"),
-            ("SELECTED", "Selected", "Snap to other selected mesh objects"),
-            ("VISIBLE", "All Visible", "Snap to all visible meshes (budget-controlled)"),
-            ("COLLECTION", "Manual Collection", "Snap only to a specific collection"),
-        ],
+        items=_SCOPE_ITEMS,
         default="VISIBLE",
     )
-    bpy.types.Scene.target_collection = PointerProperty(
+    bpy.types.Scene.smartclip_target_collection = PointerProperty(
         name="Target Collection",
         type=bpy.types.Collection,
     )
@@ -258,17 +286,20 @@ def register():
     )
 
     _register_keymaps()
+    if _on_load_post not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_on_load_post)
+    bpy.app.timers.register(_deferred_init, first_interval=0.0)
 
 
 def unregister():
+    if bpy.app.timers.is_registered(_deferred_init):
+        bpy.app.timers.unregister(_deferred_init)
+    if _on_load_post in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_on_load_post)
     remove_all_draw_handlers()
     _unregister_keymaps()
 
-    props = (
-        "smartclip_align_z", "smartclip_align_y", "smartclip_align_x",
-        "smartclip_runtime_info", "target_collection", "target_scope", "smartclip_enabled",
-    )
-    for p in props:
+    for p in reversed(_SCENE_PROPS):
         if hasattr(bpy.types.Scene, p):
             delattr(bpy.types.Scene, p)
 

@@ -15,19 +15,19 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-import src  # noqa: E402
+import smart_clipping  # noqa: E402
 
 
 def ensure_addon_enabled():
-    if not hasattr(bpy.types.Scene, "target_scope"):
+    if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
         try:
-            src.register()
+            smart_clipping.register()
         except ValueError:
             pass
 
-    if "src" not in bpy.context.preferences.addons:
+    if "smart_clipping" not in bpy.context.preferences.addons:
         try:
-            bpy.ops.preferences.addon_enable(module="src")
+            bpy.ops.preferences.addon_enable(module="smart_clipping")
         except Exception:
             pass
 
@@ -82,9 +82,9 @@ def main():
 
     scene = bpy.context.scene
     scene.smartclip_enabled = True
-    scene.target_scope = "VISIBLE"
+    scene.smartclip_target_scope = "VISIBLE"
 
-    prefs = bpy.context.preferences.addons.get("src")
+    prefs = bpy.context.preferences.addons.get("smart_clipping")
     if prefs:
         prefs = prefs.preferences
         prefs.max_vertex_budget = 50000
@@ -109,7 +109,7 @@ def main():
     c2 = add_cube("SC_COL_B", (-5.0, 3.0, 2.0))
     link_only_to_collection(c1, col)
     link_only_to_collection(c2, col)
-    scene.target_collection = col
+    scene.smartclip_target_collection = col
 
     bpy.ops.object.select_all(action="DESELECT")
     active.select_set(True)
@@ -127,6 +127,7 @@ def main():
     print("[ Budget ]          N-Panel runtime info shows 'Budget exceeded' (SC_Heavy_100k is sampled).")
     print("[ Collection ]      Scope=COLLECTION, col=SC_Manual_Refs → only SC_COL_A/B as targets.")
     print("[ Edit Mode ]       Tab → select verts → Shift+G → selected move, unselected snap.")
+    print("[ Multi / Redo ]    Select several objects → Shift+G moves all; after LMB adjust Offset (F9).")
     print(f"\n  Heavy: {heavy.name}, verts={len(heavy.data.vertices)}")
     print("================================================")
 

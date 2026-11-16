@@ -82,6 +82,29 @@ axis_align_dense
 find_hit_cap
   The per-query projection cap does not count excluded (moving) points.
 
+object_mode_excludes_movers
+  Object Mode: every moving object and the children moving with it are left
+  out of the tree.
+
+evaluated_mesh_targets
+  Targets use the evaluated mesh (an Array modifier triples the points).
+
+execute_moves_all_selected
+  execute() with an offset moves every selected object by the same world delta,
+  does not double-move a selected child, and respects lock_location.
+
+execute_edit_multi_object
+  Edit Mode with two meshes: the selected vertex of each moves by the world
+  delta (different object scales), the pivot is their median.
+
+legacy_prop_migration
+  1.x scene settings (target_scope / target_collection) are copied into the
+  prefixed 2.0 properties from both storage locations (4.x custom properties,
+  5.x system properties) without overwriting values already set.
+
+pixel_world_size
+  World size of one pixel at a given depth (drives the view-scaled search radius).
+
 Exit behaviour
 --------------
   Exits with code 0 if all selected cases pass, code 1 if any fail.
@@ -100,7 +123,9 @@ Drives the modal operator through simulated mouse / keyboard events and checks:
   - a child whose parent was transformed follows the mouse exactly (no parent-space
     mix-up) and ESC restores it
   - orbiting the view mid-move does not make the object jump
-  - an X constraint holds in world space; LMB confirms
+  - an X constraint holds in world space; LMB confirms and the final offset is
+    stored for the redo (Adjust Last Operation) panel
+  - all selected objects move together
   - holding RMB hard-snaps exactly onto a target vertex
   - Edit Mode moves the selected vertex and ESC restores it
   - no Python errors were printed (e.g. from draw handlers)

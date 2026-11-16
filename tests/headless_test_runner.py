@@ -23,16 +23,16 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-import src  # noqa: E402
-from src import detector, utils  # noqa: E402
+import smart_clipping  # noqa: E402
+from smart_clipping import detector, ops, utils  # noqa: E402
 
 
 def _ensure_addon_enabled():
     # Register by import path (the addon is not installed in this Blender).
     # Preferences stay unavailable, so code falls back to its defaults and
     # tests control the budget through _temporary_budget().
-    if not hasattr(bpy.types.Scene, "target_scope"):
-        src.register()
+    if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
+        smart_clipping.register()
 
 
 def _clear_scene():
@@ -124,8 +124,11 @@ def _temporary_budget(max_vertex_budget):
 
 def case_scene_properties_registered():
     assert hasattr(bpy.types.Scene, "smartclip_enabled")
-    assert hasattr(bpy.types.Scene, "target_scope")
-    assert hasattr(bpy.types.Scene, "target_collection")
+    # 1.x names must be gone (renamed with a prefix in 2.0)
+    assert not hasattr(bpy.types.Scene, "target_scope")
+    assert not hasattr(bpy.types.Scene, "target_collection")
+    assert hasattr(bpy.types.Scene, "smartclip_target_scope")
+    assert hasattr(bpy.types.Scene, "smartclip_target_collection")
     assert hasattr(bpy.types.Scene, "smartclip_runtime_info")
     assert hasattr(bpy.types.Scene, "smartclip_align_x")
     assert hasattr(bpy.types.Scene, "smartclip_align_y")
@@ -138,14 +141,14 @@ def case_scope_self():
     _add_cube("Self_B", (5.0, 0.0, 0.0))
     _select_only(a)
     scene = bpy.context.scene
-    scene.target_scope = "SELF"
+    scene.smartclip_target_scope = "SELF"
 
     with _temporary_budget(100000):
         # Object Mode: the whole active object moves -> nothing to snap to.
         obj_mode = detector.build_spatial_tree(bpy.context, active_obj=a)
         # Edit Mode: only the moving vertices are excluded.
         edit_mode = detector.build_spatial_tree(bpy.context, active_obj=a,
-                                                moving_vert_indices={0, 1})
+                                                moving_verts={a: {0, 1}})
 
     assert obj_mode.point_count == 0
     assert obj_mode.tree is None
@@ -168,7 +171,7 @@ def case_scope_selected():
     bpy.context.view_layer.objects.active = active
 
     scene = bpy.context.scene
-    scene.target_scope = "SELECTED"
+    scene.smartclip_target_scope = "SELECTED"
 
     with _temporary_budget(100000):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
@@ -185,7 +188,7 @@ def case_scope_visible_distance_sort():
     _select_only(active)
 
     scene = bpy.context.scene
-    scene.target_scope = "VISIBLE"
+    scene.smartclip_target_scope = "VISIBLE"
 
     with _temporary_budget(100000):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
@@ -205,7 +208,7 @@ def case_budget_fallback_with_cubes():
     _select_only(active)
 
     scene = bpy.context.scene
-    scene.target_scope = "VISIBLE"
+    scene.smartclip_target_scope = "VISIBLE"
 
     # Cube has 8 vertices; budget 8 fits exactly the nearest target (B),
     # leaving nothing for C, which falls back to BOUNDS only.
@@ -241,8 +244,8 @@ def case_scope_collection():
     _link_to_collection(active, bpy.context.scene.collection)
 
     scene = bpy.context.scene
-    scene.target_scope = "COLLECTION"
-    scene.target_collection = col_a
+    scene.smartclip_target_scope = "COLLECTION"
+    scene.smartclip_target_collection = col_a
 
     with _temporary_budget(100000):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
@@ -259,7 +262,7 @@ def case_stress_100k_vertices():
     _select_only(active)
 
     scene = bpy.context.scene
-    scene.target_scope = "VISIBLE"
+    scene.smartclip_target_scope = "VISIBLE"
 
     with _temporary_budget(50000):
         start = time.perf_counter()
@@ -275,7 +278,7 @@ def case_stress_100k_vertices():
     assert result.point_count == result.source_vertex_count + 9
     types = {m.point_type for m in result.point_meta}
     assert types == {"POINT", "BOUNDS"}
-    print(f"[src:test] stress build elapsed: {elapsed:.4f}s "
+    print(f"[smartclip:test] stress build elapsed: {elapsed:.4f}s "
           f"(tree points: {result.point_count})")
 
 
@@ -286,7 +289,7 @@ def case_budget_partial_fill():
     _create_grid_object("Part_Grid", (8.0, 0.0, 0.0), 20, 20)       # 400 verts
     _add_cube("Part_Far", (30.0, 0.0, 0.0))                         # 8 verts, farthest
     _select_only(active)
-    bpy.context.scene.target_scope = "VISIBLE"
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
 
     with _temporary_budget(108):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
@@ -316,8 +319,8 @@ def case_scope_collection_recursive():
     _link_to_collection(child_obj, child)
 
     scene = bpy.context.scene
-    scene.target_scope = "COLLECTION"
-    scene.target_collection = parent
+    scene.smartclip_target_scope = "COLLECTION"
+    scene.smartclip_target_collection = parent
 
     with _temporary_budget(100000):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
@@ -329,7 +332,7 @@ def case_edit_mode_sync():
     _clear_scene()
     obj = _add_cube("Edit_Sync", (1.0, 2.0, 3.0))
     _select_only(obj)
-    bpy.context.scene.target_scope = "SELF"
+    bpy.context.scene.smartclip_target_scope = "SELF"
 
     bpy.ops.object.mode_set(mode="EDIT")
     try:
@@ -343,7 +346,7 @@ def case_edit_mode_sync():
 
         with _temporary_budget(100000):
             result = detector.build_spatial_tree(
-                bpy.context, active_obj=obj, moving_vert_indices={new_index},
+                bpy.context, active_obj=obj, moving_verts={obj: {new_index}},
             )
     finally:
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -409,6 +412,8 @@ def _top_view():
     rv3d = SimpleNamespace(
         perspective_matrix=Matrix.Diagonal((0.1, 0.1, -0.01, 1.0)),
         view_matrix=Matrix.Identity(4),  # looking down -Z
+        is_perspective=False,
+        view_perspective="ORTHO",
     )
     return region, rv3d
 
@@ -497,6 +502,179 @@ def case_find_candidates_hit_cap_skips_excluded():
     assert (cands[0].location - Vector((0.3, 0.0, 0.0))).length < 1e-6
 
 
+def case_object_mode_excludes_movers_and_children():
+    _clear_scene()
+    a = _add_cube("Mv_A", (0.0, 0.0, 0.0))
+    b = _add_cube("Mv_B", (3.0, 0.0, 0.0))
+    child = _add_cube("Mv_BChild", (3.0, 3.0, 0.0))
+    _add_cube("Mv_Target", (6.0, 0.0, 0.0))
+    child.parent = b
+    _select_only(a)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+
+    with _temporary_budget(100000):
+        result = detector.build_spatial_tree(bpy.context, active_obj=a,
+                                             exclude_objects=[a, b])
+
+    # Moving objects and the child that moves with its parent are not targets.
+    assert {m.obj_name for m in result.point_meta} == {"Mv_Target"}
+
+
+def case_evaluated_mesh_targets():
+    _clear_scene()
+    active = _add_cube("Ev_Active", (0.0, 0.0, 0.0))
+    arrayed = _add_cube("Ev_Array", (4.0, 0.0, 0.0))
+    mod = arrayed.modifiers.new("Array", "ARRAY")
+    mod.count = 3
+    _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+
+    with _temporary_budget(100000):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+
+    # Snap targets follow what is displayed (modifiers applied).
+    assert result.point_count == 24, result.point_count
+    far_x = max(co.x for co in result.points)
+    assert abs(far_x - (4.0 + 1.0 + 2 * 2.0)) < 1e-4, far_x
+
+
+def _run_move(offset):
+    bpy.ops.view3d.smartclip_move(offset=offset)
+
+
+def case_execute_moves_all_selected():
+    _clear_scene()
+    scene = bpy.context.scene
+    scene.smartclip_enabled = True
+    parent = _add_cube("Ex_Parent", (0.0, 0.0, 0.0))
+    parent.rotation_euler = (0.0, 0.0, 0.7)
+    child = _add_cube("Ex_Child", (2.0, 0.0, 0.0))
+    other = _add_cube("Ex_Other", (0.0, 4.0, 0.0))
+    locked = _add_cube("Ex_Locked", (0.0, -4.0, 0.0))
+    locked.lock_location = (False, True, False)
+    bpy.context.view_layer.update()
+    child.parent = parent
+    child.matrix_parent_inverse = parent.matrix_world.inverted()
+    unselected = _add_cube("Ex_Unselected", (9.0, 9.0, 0.0))
+    bpy.context.view_layer.update()
+
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in (parent, child, other, locked):
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = parent
+
+    before = {o.name: o.matrix_world.translation.copy()
+              for o in (parent, child, other, locked, unselected)}
+    pivot, movers = ops.gather_movers(bpy.context)
+    # The child moves with its parent, so it is not a mover itself.
+    assert sorted(m.obj.name for m in movers) == ["Ex_Locked", "Ex_Other", "Ex_Parent"]
+    assert (pivot - before["Ex_Parent"]).length < 1e-6
+
+    delta = Vector((1.0, 2.0, 3.0))
+    _run_move(delta)
+    bpy.context.view_layer.update()
+
+    for name in ("Ex_Parent", "Ex_Child", "Ex_Other"):
+        moved = bpy.data.objects[name].matrix_world.translation - before[name]
+        assert (moved - delta).length < 1e-4, (name, moved)
+    moved = locked.matrix_world.translation - before["Ex_Locked"]
+    assert (moved - Vector((1.0, 0.0, 3.0))).length < 1e-4, moved  # Y locked
+    assert (unselected.matrix_world.translation - before["Ex_Unselected"]).length < 1e-9
+
+
+def case_execute_edit_mode_multi_object():
+    _clear_scene()
+    scene = bpy.context.scene
+    scene.smartclip_enabled = True
+    a = _add_cube("EM_A", (0.0, 0.0, 0.0))
+    b = _add_cube("EM_B", (5.0, 0.0, 0.0))
+    b.scale = (2.0, 2.0, 2.0)
+    bpy.context.view_layer.update()
+    bpy.ops.object.select_all(action="DESELECT")
+    a.select_set(True)
+    b.select_set(True)
+    bpy.context.view_layer.objects.active = a
+
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        for obj in (a, b):
+            bm = bmesh.from_edit_mesh(obj.data)
+            for v in bm.verts:
+                v.select = False
+            bm.verts.ensure_lookup_table()
+            bm.verts[0].select = True
+            bmesh.update_edit_mesh(obj.data)
+        starts = {}
+        for obj in (a, b):
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.verts.ensure_lookup_table()
+            starts[obj.name] = (obj.matrix_world @ bm.verts[0].co,
+                                obj.matrix_world @ bm.verts[1].co)
+
+        pivot, movers = ops.gather_movers(bpy.context)
+        assert sorted(m.obj.name for m in movers) == ["EM_A", "EM_B"]
+        expected_pivot = (starts["EM_A"][0] + starts["EM_B"][0]) / 2
+        assert (pivot - expected_pivot).length < 1e-5
+
+        delta = Vector((0.5, -1.0, 2.0))
+        _run_move(delta)
+
+        for obj in (a, b):
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.verts.ensure_lookup_table()
+            moved = obj.matrix_world @ bm.verts[0].co - starts[obj.name][0]
+            still = obj.matrix_world @ bm.verts[1].co - starts[obj.name][1]
+            assert (moved - delta).length < 1e-4, (obj.name, moved)
+            assert still.length < 1e-6
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def case_legacy_scene_property_migration():
+    from bpy.props import EnumProperty, PointerProperty
+
+    coll = bpy.data.collections.new("SC_Legacy")
+    # (a) values written through the 1.x bpy.props definitions; Blender 5.x
+    #     keeps them in the system-property storage
+    legacy_a = bpy.data.scenes.new("SC_Legacy_A")
+    bpy.types.Scene.target_scope = EnumProperty(items=[
+        ("SELF", "", ""), ("SELECTED", "", ""), ("VISIBLE", "", ""), ("COLLECTION", "", ""),
+    ], default="VISIBLE")
+    bpy.types.Scene.target_collection = PointerProperty(type=bpy.types.Collection)
+    try:
+        legacy_a.target_scope = "COLLECTION"
+        legacy_a.target_collection = coll
+    finally:
+        del bpy.types.Scene.target_scope
+        del bpy.types.Scene.target_collection
+    # (b) values stored as plain ID properties (Blender 4.x storage)
+    legacy_b = bpy.data.scenes.new("SC_Legacy_B")
+    legacy_b["target_scope"] = 1
+    # (c) already-set 2.0 values must not be overwritten
+    legacy_c = bpy.data.scenes.new("SC_Legacy_C")
+    legacy_c["target_scope"] = 0
+    legacy_c.smartclip_target_scope = "VISIBLE"
+
+    try:
+        smart_clipping.migrate_legacy_scene_properties()
+        assert legacy_a.smartclip_target_scope == "COLLECTION"
+        assert legacy_a.smartclip_target_collection == coll
+        assert legacy_b.smartclip_target_scope == "SELECTED"
+        assert legacy_b.smartclip_target_collection is None
+        assert legacy_c.smartclip_target_scope == "VISIBLE"
+    finally:
+        for sc in (legacy_a, legacy_b, legacy_c):
+            bpy.data.scenes.remove(sc)
+        bpy.data.collections.remove(coll)
+
+
+def case_pixel_world_size():
+    region, rv3d = _top_view()
+    # 50 px per world unit in the synthetic top view
+    size = utils.pixel_world_size(region, rv3d, Vector((1.0, 2.0, 0.0)))
+    assert abs(size - 0.02) < 1e-5, size
+
+
 CASES = {
     "scene_props": case_scene_properties_registered,
     "scope_self": case_scope_self,
@@ -513,6 +691,12 @@ CASES = {
     "axis_align_gate": case_axis_align_screen_gate,
     "axis_align_dense": case_axis_align_nearest_in_dense_data,
     "find_hit_cap": case_find_candidates_hit_cap_skips_excluded,
+    "object_mode_excludes_movers": case_object_mode_excludes_movers_and_children,
+    "evaluated_mesh_targets": case_evaluated_mesh_targets,
+    "execute_moves_all_selected": case_execute_moves_all_selected,
+    "execute_edit_multi_object": case_execute_edit_mode_multi_object,
+    "legacy_prop_migration": case_legacy_scene_property_migration,
+    "pixel_world_size": case_pixel_world_size,
 }
 
 
@@ -533,7 +717,7 @@ def main():
     selected = [args.case] if args.case else list(CASES.keys())
 
     failures = 0
-    print("[src:test] running cases:", ", ".join(selected))
+    print("[smartclip:test] running cases:", ", ".join(selected))
     for name in selected:
         fn = CASES[name]
         try:
@@ -544,7 +728,7 @@ def main():
             print(f"[FAIL] {name}: {exc}")
             traceback.print_exc()
 
-    print(f"[src:test] summary: passed={len(selected) - failures} failed={failures}")
+    print(f"[smartclip:test] summary: passed={len(selected) - failures} failed={failures}")
     if failures:
         sys.exit(1)
 

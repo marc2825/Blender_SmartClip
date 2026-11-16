@@ -2,17 +2,19 @@
 
 Lifecycle
 ---------
-invoke  -- build KD-Tree, snapshot initial state, register draw handlers.
+invoke  -- gather what moves, build KD-Tree, register draw handlers.
 modal   -- process mouse / keyboard, query tree, apply snap, redraw.
-finish  -- remove draw handlers, optionally restore initial state.
+finish  -- remove draw handlers, store the final offset for redo.
 cancel  -- called by Blender when the modal is aborted externally
            (file load, window close): restore and clean up.
+execute -- apply ``offset`` directly (redo panel / scripting).
 """
 
 import traceback
 
 import bmesh
 import bpy
+from bpy.props import FloatVectorProperty
 from mathutils import Vector
 
 from . import detector, drawing
@@ -22,16 +24,16 @@ from .utils import (
     apply_constraint,
     clamp01,
     constraint_axes,
+    pixel_world_size,
     screen_to_world,
-    world_delta_to_local,
     world_to_location_matrix,
     world_to_screen,
 )
 
-# World-space KD-Tree search radius bounds.  The screen-pixel filter
+# The KD-Tree search radius covers half the viewport at the depth of the
+# moving point, so it follows the view scale.  The screen-pixel filter
 # (snap_distance_px) is the real gatekeeper; the radius only pre-filters.
-MIN_QUERY_RADIUS = 5.0
-MAX_QUERY_RADIUS = 50.0
+QUERY_RADIUS_VIEWPORT_FRACTION = 0.5
 
 # Soft-snap pull strength at zero screen distance.
 SOFT_PULL_POINT = 0.35
@@ -75,17 +77,151 @@ def _remove_handler(handle):
         _live_draw_handles.remove(handle)
 
 
+# ----------------------------------------------------------------------
+# Movers: what gets translated, and how to undo it
+# ----------------------------------------------------------------------
+
+class _ObjectMover:
+    """Translates one object; `location` lives in its parent space."""
+
+    __slots__ = ("obj", "init_loc", "to_loc", "lock")
+
+    def __init__(self, obj):
+        self.obj = obj
+        self.init_loc = obj.location.copy()
+        self.to_loc = world_to_location_matrix(obj)
+        self.lock = tuple(obj.lock_location)
+
+    def apply(self, delta_world: Vector):
+        delta = self.to_loc @ delta_world
+        for i, locked in enumerate(self.lock):
+            if locked:
+                delta[i] = 0.0
+        self.obj.location = self.init_loc + delta
+
+    def restore(self):
+        self.obj.location = self.init_loc
+
+
+class _EditMover:
+    """Translates the selected vertices of one mesh in Edit Mode."""
+
+    __slots__ = ("obj", "init_cos", "to_local")
+
+    def __init__(self, obj, init_cos):
+        self.obj = obj
+        self.init_cos = init_cos  # {lookup-table index: local co}
+        self.to_local = obj.matrix_world.inverted_safe().to_3x3()
+
+    def _write(self, delta_local: Vector):
+        bm = bmesh.from_edit_mesh(self.obj.data)
+        bm.verts.ensure_lookup_table()
+        for idx, orig in self.init_cos.items():
+            bm.verts[idx].co = orig + delta_local
+        bmesh.update_edit_mesh(self.obj.data, loop_triangles=False, destructive=False)
+
+    def apply(self, delta_world: Vector):
+        self._write(self.to_local @ delta_world)
+
+    def restore(self):
+        self._write(Vector((0.0, 0.0, 0.0)))
+
+
+def _edit_mode_objects(context):
+    """Meshes in Edit Mode, active first, one per mesh datablock."""
+    candidates = list(getattr(context, "objects_in_mode_unique_data", None) or [])
+    active = context.active_object
+    if active is not None and active.mode == "EDIT" and active.type == "MESH":
+        candidates.insert(0, active)
+    seen = set()
+    result = []
+    for obj in candidates:
+        if obj.type != "MESH" or obj.mode != "EDIT":
+            continue
+        key = obj.data.as_pointer()
+        if key not in seen:
+            seen.add(key)
+            result.append(obj)
+    return result
+
+
+def _has_moving_ancestor(obj, moving_ptrs) -> bool:
+    parent = obj.parent
+    while parent is not None:
+        if parent.as_pointer() in moving_ptrs:
+            return True
+        parent = parent.parent
+    return False
+
+
+def gather_movers(context):
+    """Return ``(pivot_world, movers)`` for the current selection.
+
+    Object Mode: every selected editable object (falling back to the active
+    one); children of a moving parent are left to the parent.  The pivot is
+    the active object's origin when it moves, otherwise the median origin.
+
+    Edit Mode: the selected vertices of every mesh in Edit Mode; the pivot
+    is their median point.  ``movers`` is empty when nothing would move.
+    """
+    active = context.active_object
+
+    if context.mode == "EDIT_MESH":
+        movers = []
+        world_sum = Vector((0.0, 0.0, 0.0))
+        count = 0
+        for obj in _edit_mode_objects(context):
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.verts.ensure_lookup_table()
+            # Lookup-table positions (BMVert.index may be dirty after edits);
+            # they match mesh.vertices order once the edit mesh is flushed.
+            sel = {i: v.co.copy() for i, v in enumerate(bm.verts) if v.select}
+            if not sel:
+                continue
+            mw = obj.matrix_world
+            for co in sel.values():
+                world_sum += mw @ co
+            count += len(sel)
+            movers.append(_EditMover(obj, sel))
+        pivot = world_sum / count if count else Vector((0.0, 0.0, 0.0))
+        return pivot, movers
+
+    selected = list(context.selected_editable_objects)
+    if not selected and active is not None:
+        selected = [active]
+    moving_ptrs = {obj.as_pointer() for obj in selected}
+    roots = [obj for obj in selected if not _has_moving_ancestor(obj, moving_ptrs)]
+    movers = [_ObjectMover(obj) for obj in roots]
+    if not movers:
+        return Vector((0.0, 0.0, 0.0)), movers
+
+    active_moves = active is not None and (
+        active.as_pointer() in moving_ptrs or _has_moving_ancestor(active, moving_ptrs)
+    )
+    if active_moves:
+        pivot = active.matrix_world.translation.copy()
+    else:
+        pivot = sum((m.obj.matrix_world.translation for m in movers), Vector()) / len(movers)
+    return pivot, movers
+
+
 class SMARTCLIP_OT_modal_move(bpy.types.Operator):
     bl_idname = "view3d.smartclip_move"
     bl_label = "Smart Clipping Move"
     bl_description = "Move with smart-clipping guides and snapping"
     bl_options = {"REGISTER", "UNDO", "BLOCKING"}
 
+    offset: FloatVectorProperty(
+        name="Offset",
+        description="World-space translation applied to the selection",
+        subtype="TRANSLATION",
+        size=3,
+        options={"SKIP_SAVE"},
+    )
+
     # ------------------------------------------------------------------ poll
     @classmethod
     def poll(cls, context):
-        if not (context.area and context.area.type == "VIEW_3D"):
-            return False
         scene = context.scene
         if not getattr(scene, "smartclip_enabled", False):
             return False
@@ -98,21 +234,24 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             return True
         return False
 
+    # ------------------------------------------------------------- execute
+    def execute(self, context):
+        _pivot, movers = gather_movers(context)
+        if not movers:
+            self.report({"WARNING"}, "Nothing selected to move")
+            return {"CANCELLED"}
+        delta = Vector(self.offset)
+        for mover in movers:
+            mover.apply(delta)
+        return {"FINISHED"}
+
     # -------------------------------------------------------------- invoke
     def invoke(self, context, event):
         self._init_state()
 
         scene = context.scene
-        if not scene.smartclip_enabled:
-            return {"FINISHED"}
-
         self._active_obj = context.active_object
-        if self._active_obj is None:
-            return {"FINISHED"}
-
-        self._is_edit = context.mode == "EDIT_MESH" and self._active_obj.type == "MESH"
-        if context.mode not in {"OBJECT", "EDIT_MESH"}:
-            return {"FINISHED"}
+        self._is_edit = context.mode == "EDIT_MESH"
 
         # Colours from preferences
         prefs = get_addon_prefs(context)
@@ -123,7 +262,13 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         # Resolve the 3-D view region we'll use for projections
         self._region, self._rv3d = _resolve_region(context)
         if not self._region or not self._rv3d:
-            self.report({"WARNING"}, "Could not resolve 3D View region")
+            self.report({"WARNING"}, "Smart Clipping Move needs a 3D Viewport")
+            return {"CANCELLED"}
+
+        self._start_world, self._movers = gather_movers(context)
+        if not self._movers:
+            self.report({"WARNING"}, "Select at least one vertex" if self._is_edit
+                        else "Nothing selected to move")
             return {"CANCELLED"}
 
         # Mouse start
@@ -131,32 +276,24 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self._last_mouse = self._start_mouse.copy()
         self._solved_mouse = self._start_mouse.copy()
 
-        # Snapshot the geometry that will be moved
-        if self._is_edit:
-            if not self._snapshot_edit_mode():
-                self.report({"WARNING"}, "Select at least one vertex")
-                return {"CANCELLED"}
-        else:
-            obj = self._active_obj
-            self._init_obj_loc = obj.location.copy()
-            # The origin's world position; `location` is in parent space.
-            self._start_world = obj.matrix_world.translation.copy()
-            self._world_to_loc = world_to_location_matrix(obj)
-
         # Depth reference for mouse unprojection
         self._start_mouse_world = screen_to_world(
             self._region, self._rv3d, self._start_mouse, self._start_world,
         )
         self._view_matrix = self._rv3d.perspective_matrix.copy()
 
-        # Build spatial index (heavy work happens here, once)
-        # In Edit Mode, pass the selected vertex indices so only those are
-        # excluded from snap candidates (non-selected verts remain as targets).
-        moving_verts = set(self._init_vert_cos.keys()) if self._is_edit else None
-        self._build = detector.build_spatial_tree(
-            context, active_obj=self._active_obj,
-            moving_vert_indices=moving_verts,
-        )
+        # Build spatial index (heavy work happens here, once).  Moving
+        # geometry is excluded so it can never snap to itself.
+        if self._is_edit:
+            self._build = detector.build_spatial_tree(
+                context, active_obj=self._active_obj,
+                moving_verts={m.obj: set(m.init_cos) for m in self._movers},
+            )
+        else:
+            self._build = detector.build_spatial_tree(
+                context, active_obj=self._active_obj,
+                exclude_objects=[m.obj for m in self._movers],
+            )
         scene.smartclip_runtime_info = _runtime_info(self._build)
 
         # Register GPU draw handlers
@@ -190,6 +327,8 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
         # Confirm
         if event.type in {"LEFTMOUSE", "RET", "NUMPAD_ENTER"} and event.value == "PRESS":
+            if self.applied_world is not None:
+                self.offset = self.applied_world - self._start_world
             self._finish(context)
             return {"FINISHED"}
 
@@ -226,6 +365,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self._build = None
         self._region = None
         self._rv3d = None
+        self._movers = []
 
         self._start_mouse = Vector((0.0, 0.0))
         self._last_mouse = Vector((0.0, 0.0))
@@ -234,10 +374,6 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self._start_mouse_world = Vector((0.0, 0.0, 0.0))
         self._raw_movement = Vector((0.0, 0.0, 0.0))  # before constraints
         self._view_matrix = None
-
-        self._init_obj_loc = None
-        self._world_to_loc = None
-        self._init_vert_cos = {}  # {vert_index: Vector}
 
         # Axis / plane movement constraint (like G then X/Y/Z / Shift+X/Y/Z)
         # None = free, "X"/"Y"/"Z" = single axis, "YZ"/"XZ"/"XY" = plane
@@ -258,19 +394,6 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
         self._handle_3d = None
         self._handle_2d = None
-
-    def _snapshot_edit_mode(self) -> bool:
-        bm = bmesh.from_edit_mesh(self._active_obj.data)
-        bm.verts.ensure_lookup_table()
-        # Use lookup-table positions (BMVert.index may be dirty after edits);
-        # they match mesh.vertices order once the edit mesh is flushed.
-        sel = {i: v.co.copy() for i, v in enumerate(bm.verts) if v.select}
-        if not sel:
-            return False
-        center_local = sum(sel.values(), Vector()) / len(sel)
-        self._start_world = self._active_obj.matrix_world @ center_local
-        self._init_vert_cos = sel
-        return True
 
     # ------------------------------------------------ constraint toggle
     def _toggle_constraint(self, axis_key: str, plane: bool):
@@ -314,11 +437,17 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         )
         self._start_mouse_world = mouse_world - self._raw_movement
 
+    def _query_radius(self) -> float:
+        px = pixel_world_size(self._region, self._rv3d, self.free_world)
+        if not px:
+            return max(getattr(self._rv3d, "view_distance", 10.0), 1e-3)
+        extent = max(self._region.width, self._region.height)
+        return max(px * extent * QUERY_RADIUS_VIEWPORT_FRACTION, 1e-6)
+
     # --------------------------------------------------------- snap core
     def _do_snap(self, context):
         prefs = get_addon_prefs(context)
         threshold_px = prefs.snap_distance_px if prefs else DEFAULT_SNAP_DISTANCE_PX
-        query_radius = min(MAX_QUERY_RADIUS, max(MIN_QUERY_RADIUS, threshold_px * 0.5))
 
         self._sync_view()
         mouse_world = screen_to_world(
@@ -360,7 +489,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
                 rv3d=self._rv3d,
                 mouse_xy=free_screen,
                 snap_distance_px=threshold_px,
-                query_radius=query_radius,
+                query_radius=self._query_radius(),
             )
 
         self.current_candidate = candidates[0] if candidates else None
@@ -379,41 +508,24 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         else:
             self.applied_world = self.free_world.copy()
 
-        self._apply_position(self.applied_world)
+        delta = self.applied_world - self._start_world
+        for mover in self._movers:
+            mover.apply(delta)
         self._update_hud()
 
         if context.area:
             context.area.tag_redraw()
 
-    def _apply_position(self, world_co: Vector):
-        delta_w = world_co - self._start_world
-        if self._is_edit:
-            delta_l = world_delta_to_local(self._active_obj, delta_w)
-            bm = bmesh.from_edit_mesh(self._active_obj.data)
-            bm.verts.ensure_lookup_table()
-            for idx, orig in self._init_vert_cos.items():
-                bm.verts[idx].co = orig + delta_l
-            bmesh.update_edit_mesh(self._active_obj.data, loop_triangles=False, destructive=False)
-        else:
-            self._active_obj.location = self._init_obj_loc + self._world_to_loc @ delta_w
-
     def _restore(self):
-        if self._is_edit:
-            if not self._init_vert_cos:
-                return
-            bm = bmesh.from_edit_mesh(self._active_obj.data)
-            bm.verts.ensure_lookup_table()
-            for idx, orig in self._init_vert_cos.items():
-                bm.verts[idx].co = orig
-            bmesh.update_edit_mesh(self._active_obj.data, loop_triangles=False, destructive=False)
-        elif self._init_obj_loc is not None:
-            self._active_obj.location = self._init_obj_loc
+        for mover in self._movers:
+            mover.restore()
 
     def _safe_restore(self):
-        try:
-            self._restore()
-        except Exception:
-            traceback.print_exc()
+        for mover in self._movers:
+            try:
+                mover.restore()
+            except Exception:
+                traceback.print_exc()
 
     def _update_hud(self):
         parts = []
