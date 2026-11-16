@@ -8,7 +8,7 @@ Run as a script to verify that every other file quoting the version agrees:
 
 Print the CHANGELOG section of a version (used as GitHub release notes):
 
-  python scripts/versioning.py --notes 2.0.0 [--output dist/RELEASE_NOTES.md]
+  python scripts/versioning.py --notes 1.2.0 [--output dist/RELEASE_NOTES.md]
 
 Checks:
   - CHANGELOG.md: newest released entry is ``## [X.Y.Z] - YYYY-MM-DD``

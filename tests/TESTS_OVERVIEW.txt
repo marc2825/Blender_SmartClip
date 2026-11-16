@@ -98,8 +98,8 @@ execute_edit_multi_object
   delta (different object scales), the pivot is their median.
 
 legacy_prop_migration
-  1.x scene settings (target_scope / target_collection) are copied into the
-  prefixed 2.0 properties from both storage locations (4.x custom properties,
+  Pre-1.2 scene settings (target_scope / target_collection) are copied into the
+  prefixed properties from both storage locations (4.x custom properties,
   5.x system properties) without overwriting values already set.
 
 pixel_world_size

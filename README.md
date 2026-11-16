@@ -1,4 +1,4 @@
-# Smart Clipping (Blender Addon) v2.0.0
+# Smart Clipping (Blender Addon) v1.2.0
 
 ![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)
 [![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=release)](https://github.com/marc2825/Blender_SmartClip/releases/latest)
@@ -39,8 +39,8 @@
 2. Blender > Preferences > Add-ons > Install from Disk（4.1 以前は Install）で ZIP を指定
 3. アドオン「Smart Clipping」を有効化
 
-#### 1.x からの更新
-2.0.0 でアドオンのモジュール名が `src` から `smart_clipping` に変わりました。
+#### 1.1.x 以前からの更新
+1.2.0 でアドオンのモジュール名が `src` から `smart_clipping` に変わりました。
 
 1. Preferences > Add-ons で旧「Smart Clipping」（モジュール `src`）を無効化して削除してから、新しい ZIP をインストールしてください（両方を有効にすると登録が衝突します）
 2. アドオン設定（Snap Threshold・Max Vertex Budget・色）は初期値に戻るので、必要なら設定し直してください
@@ -196,8 +196,8 @@ It applies soft snap when close (gradual interpolation toward a candidate), hard
 2. Blender > Preferences > Add-ons > Install from Disk (Install on 4.1 and older)
 3. Enable "Smart Clipping"
 
-#### Upgrading from 1.x
-In 2.0.0 the add-on module was renamed from `src` to `smart_clipping`.
+#### Upgrading from 1.1.x or earlier
+In 1.2.0 the add-on module was renamed from `src` to `smart_clipping`.
 
 1. Disable and remove the old "Smart Clipping" (module `src`) in Preferences > Add-ons before installing the new ZIP (enabling both makes their registrations collide)
 2. Add-on preferences (snap threshold, vertex budget, colors) start from their defaults again
