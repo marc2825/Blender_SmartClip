@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to package (must match bl_info, e.g. 2.0.0); dry run, no release is created"
+        description: "Version to package (must match bl_info, e.g. 1.2.0); dry run, no release is created"
         required: true
         type: string
 
@@ -54,7 +54,6 @@ jobs:
         with:
           name: Smart Clipping ${{ github.ref_name }}
           body_path: dist/RELEASE_NOTES.md
-          generate_release_notes: true
           files: |
             dist/smart_clipping-${{ github.ref_name }}.zip
             dist/smart_clipping-${{ github.ref_name }}.sha256

@@ -20,10 +20,10 @@ This repository includes templates with placeholders that should be updated.
 ## 3. Release Flow
 
 1. Update `CHANGELOG.md`.
-2. Bump `bl_info["version"]` and sync docs (`python scripts/versioning.py`), then push a semantic tag like `v2.0.0`.
+2. Bump `bl_info["version"]` and sync docs (`python scripts/versioning.py`), then push a semantic tag like `v1.2.0`.
 3. Verify `Release Addon` workflow output includes:
-   - `smart_clipping-v2.0.0.zip`
-   - `smart_clipping-v2.0.0.sha256`
+   - `smart_clipping-v1.2.0.zip`
+   - `smart_clipping-v1.2.0.sha256`
 
 ## 4. Optional Hardening
 

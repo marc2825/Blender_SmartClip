@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Smart Clipping",
     "author": "marc2825",
-    "version": (2, 0, 0),
+    "version": (1, 2, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Smart Clipping",
     "description": "Move with smart guides: KD-Tree snapping, axis align and constraints",
@@ -134,9 +134,9 @@ def _on_enabled_update(self, _context):
 
 
 # ======================================================================
-# Scene property migration (1.x -> 2.0)
+# Scene property migration (<= 1.1 -> 1.2)
 # ======================================================================
-# 1.x registered `target_scope` / `target_collection` without a prefix.
+# Up to 1.1 the addon registered `target_scope` / `target_collection` without a prefix.
 # Their saved values stay in the file as orphan ID properties: in the
 # custom-property storage up to Blender 4.x, in the system-property
 # storage (bl_system_properties_get) from Blender 5.0.
@@ -159,7 +159,7 @@ def _legacy_value(scene, name):
 
 
 def migrate_legacy_scene_properties():
-    """Copy 1.x scene settings into the prefixed 2.0 properties (once)."""
+    """Copy pre-1.2 scene settings into the prefixed properties (once)."""
     identifiers = [item[0] for item in _SCOPE_ITEMS]
     for scene in bpy.data.scenes:
         for old, new in _LEGACY_SCENE_PROPS.items():

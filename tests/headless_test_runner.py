@@ -124,7 +124,7 @@ def _temporary_budget(max_vertex_budget):
 
 def case_scene_properties_registered():
     assert hasattr(bpy.types.Scene, "smartclip_enabled")
-    # 1.x names must be gone (renamed with a prefix in 2.0)
+    # Pre-1.2 names must be gone (renamed with a prefix in 1.2)
     assert not hasattr(bpy.types.Scene, "target_scope")
     assert not hasattr(bpy.types.Scene, "target_collection")
     assert hasattr(bpy.types.Scene, "smartclip_target_scope")
@@ -634,7 +634,7 @@ def case_legacy_scene_property_migration():
     from bpy.props import EnumProperty, PointerProperty
 
     coll = bpy.data.collections.new("SC_Legacy")
-    # (a) values written through the 1.x bpy.props definitions; Blender 5.x
+    # (a) values written through the pre-1.2 bpy.props definitions; Blender 5.x
     #     keeps them in the system-property storage
     legacy_a = bpy.data.scenes.new("SC_Legacy_A")
     bpy.types.Scene.target_scope = EnumProperty(items=[
@@ -650,7 +650,7 @@ def case_legacy_scene_property_migration():
     # (b) values stored as plain ID properties (Blender 4.x storage)
     legacy_b = bpy.data.scenes.new("SC_Legacy_B")
     legacy_b["target_scope"] = 1
-    # (c) already-set 2.0 values must not be overwritten
+    # (c) already-set prefixed values must not be overwritten
     legacy_c = bpy.data.scenes.new("SC_Legacy_C")
     legacy_c["target_scope"] = 0
     legacy_c.smartclip_target_scope = "VISIBLE"
