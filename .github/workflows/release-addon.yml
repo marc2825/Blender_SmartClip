@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. 1.0.1) for manual dispatch"
+        description: "Version to package (must match bl_info, e.g. 2.0.0); dry run, no release is created"
         required: true
         type: string
 
@@ -20,34 +20,41 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Build Addon Zip
+      - name: Build Addon Zip and Release Notes
         shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euxo pipefail
           mkdir -p dist
           if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${INPUT_VERSION#v}"
           fi
+          python scripts/versioning.py
           python scripts/package_addon.py --version "${VERSION}"
+          python scripts/versioning.py --notes "${VERSION}" --output dist/RELEASE_NOTES.md
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v7
         with:
-          name: src-zip
+          name: smart_clipping-zip
           path: |
             dist/*.zip
             dist/*.sha256
+            dist/RELEASE_NOTES.md
           if-no-files-found: error
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          name: Smart Clipping ${{ github.ref_name }}
+          body_path: dist/RELEASE_NOTES.md
           generate_release_notes: true
           files: |
-            dist/src-${{ github.ref_name }}.zip
-            dist/src-${{ github.ref_name }}.sha256
+            dist/smart_clipping-${{ github.ref_name }}.zip
+            dist/smart_clipping-${{ github.ref_name }}.sha256

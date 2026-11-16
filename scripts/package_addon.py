@@ -1,8 +1,9 @@
 """
-Package the src addon directory as a release zip.
+Package the add-on as a release zip (``smart_clipping/`` at the zip root,
+installable via Blender > Preferences > Add-ons > Install from Disk).
 
-The version comes from ``bl_info`` in ``src/__init__.py``.  ``--version``
-(e.g. from a release tag) is optional and must match it.
+The version comes from ``bl_info`` in ``smart_clipping/__init__.py``.
+``--version`` (e.g. from a release tag) is optional and must match it.
 
 Usage:
   python scripts/package_addon.py
@@ -17,7 +18,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-from versioning import read_bl_info_version
+from versioning import ADDON_DIR, read_bl_info_version
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,17 +52,17 @@ def main() -> int:
     if args.version is not None and args.version.lstrip("v") != version:
         print(
             f"error: requested version {args.version} does not match "
-            f"bl_info version {version} in src/__init__.py",
+            f"bl_info version {version} in {ADDON_DIR}/__init__.py",
             file=sys.stderr,
         )
         return 1
 
-    addon_dir = root / "src"
+    addon_dir = root / ADDON_DIR
     output_dir = root / args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    zip_path = output_dir / f"src-v{version}.zip"
-    checksum_path = output_dir / f"src-v{version}.sha256"
+    zip_path = output_dir / f"{ADDON_DIR}-v{version}.zip"
+    checksum_path = output_dir / f"{ADDON_DIR}-v{version}.sha256"
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_path in sorted(addon_dir.rglob("*")):

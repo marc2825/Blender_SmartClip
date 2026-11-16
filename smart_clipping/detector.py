@@ -1,10 +1,12 @@
 """KD-Tree construction (build) and nearest-neighbour query (find) logic.
 
 The tree is built once at invoke time and stays static for the entire modal
-session.  A vertex budget controls how many raw vertices are inserted.  An
-object that does not fit into the remaining budget is down-sampled to fill
-what is left, and every over-budget object also contributes its bounding-box
-corners + origin so it stays reachable.
+session.  Targets use the evaluated geometry (modifiers applied), except
+objects in Edit Mode, whose (flushed) edit mesh is used so vertex indices
+match the BMesh.  A vertex budget controls how many raw vertices are
+inserted.  An object that does not fit into the remaining budget is
+down-sampled to fill what is left, and every over-budget object also
+contributes its bounding-box corners + origin so it stays reachable.
 """
 
 import bisect
@@ -88,7 +90,7 @@ class BuildResult:
 def _collect_scope_objects(context, active_obj):
     """Return mesh objects that match the current Target Scope setting."""
     scene = context.scene
-    scope = scene.target_scope
+    scope = scene.smartclip_target_scope
 
     if scope == "SELF":
         if active_obj and active_obj.type == "MESH":
@@ -102,7 +104,7 @@ def _collect_scope_objects(context, active_obj):
         ]
 
     if scope == "COLLECTION":
-        coll = scene.target_collection
+        coll = scene.smartclip_target_collection
         if coll:
             # all_objects includes objects of nested child collections
             return [obj for obj in coll.all_objects if obj.type == "MESH"]
@@ -127,8 +129,8 @@ def _sync_edit_meshes(objects):
 # Build
 # ---------------------------------------------------------------------------
 
-def build_spatial_tree(context, active_obj=None,
-                       moving_vert_indices: "set[int] | None" = None) -> BuildResult:
+def build_spatial_tree(context, active_obj=None, moving_verts=None,
+                       exclude_objects=None) -> BuildResult:
     """Build a static KD-Tree of snap reference points.
 
     Objects are sorted by distance from *active_obj* (nearest first).  Vertices
@@ -136,22 +138,34 @@ def build_spatial_tree(context, active_obj=None,
     limit is down-sampled to fill the remaining budget, later objects only get
     their bounding-box corners and origin.
 
-    *moving_vert_indices*: Edit Mode - the mesh vertex indices of
-    *active_obj* that are being moved; only these are excluded from snap
-    candidates.  ``None`` means Object Mode - the whole *active_obj* moves,
-    so it is not inserted at all (and does not consume budget).
+    *moving_verts*: Edit Mode - ``{object: set(vertex indices)}`` of the
+    vertices being moved; only these are excluded from snap candidates.
+    ``None`` means Object Mode: the moving objects (*exclude_objects*,
+    default ``[active_obj]``) and their descendants move as a whole, so they
+    are not inserted at all (and do not consume budget).
     """
     active_obj = active_obj or context.active_object
     prefs = get_addon_prefs(context)
     budget = prefs.max_vertex_budget if prefs else DEFAULT_VERTEX_BUDGET
 
     candidates = _collect_scope_objects(context, active_obj)
-    if moving_vert_indices is None and active_obj is not None:
-        candidates = [obj for obj in candidates if obj is not active_obj]
+    moving_by_ptr = {}
+    if moving_verts is None:
+        movers = exclude_objects if exclude_objects is not None else [active_obj]
+        skip = set()
+        for obj in movers:
+            if obj is None:
+                continue
+            skip.add(obj.as_pointer())
+            skip.update(child.as_pointer() for child in obj.children_recursive)
+        candidates = [obj for obj in candidates if obj.as_pointer() not in skip]
+    else:
+        moving_by_ptr = {obj.as_pointer(): set(idx) for obj, idx in moving_verts.items()}
     if not candidates:
         return BuildResult()
 
     _sync_edit_meshes(candidates)
+    depsgraph = context.evaluated_depsgraph_get()
 
     # Distance sort: nearest objects get full vertex data.
     active_center = object_center_world(active_obj) if active_obj else object_center_world(candidates[0])
@@ -166,39 +180,47 @@ def build_spatial_tree(context, active_obj=None,
     partial_objects: list[str] = []
 
     for obj in candidates:
-        mesh = obj.data
-        verts = mesh.vertices
-        vert_count = len(verts)
-        mw = obj.matrix_world
-        moving = moving_vert_indices if obj is active_obj else None
-        remaining = budget - total_verts
-
-        if vert_count <= remaining:
-            indices = range(vert_count)
+        if obj.mode == "EDIT":
+            source, mesh, owns_mesh = obj, obj.data, False
         else:
-            limit_exceeded = True
-            if remaining > 0:
-                step = -(-vert_count // remaining)  # ceil division
-                indices = range(0, vert_count, step)
-                partial_objects.append(obj.name)
+            source = obj.evaluated_get(depsgraph)
+            mesh, owns_mesh = source.to_mesh(), True
+        try:
+            verts = mesh.vertices
+            vert_count = len(verts)
+            mw = source.matrix_world
+            moving = moving_by_ptr.get(obj.as_pointer())
+            remaining = budget - total_verts
+
+            if vert_count <= remaining:
+                indices = range(vert_count)
             else:
-                indices = range(0)
-                bounds_objects.append(obj.name)
+                limit_exceeded = True
+                if remaining > 0:
+                    step = -(-vert_count // remaining)  # ceil division
+                    indices = range(0, vert_count, step)
+                    partial_objects.append(obj.name)
+                else:
+                    indices = range(0)
+                    bounds_objects.append(obj.name)
 
-        for vi in indices:
-            if moving and vi in moving:
-                exclude_indices.add(len(points))
-            points.append(mw @ verts[vi].co)
-            meta.append(_PointMeta(obj_name=obj.name, point_type="POINT"))
-        total_verts += len(indices)
+            for vi in indices:
+                if moving and vi in moving:
+                    exclude_indices.add(len(points))
+                points.append(mw @ verts[vi].co)
+                meta.append(_PointMeta(obj_name=obj.name, point_type="POINT"))
+            total_verts += len(indices)
 
-        if len(indices) < vert_count:
-            # Over budget: keep the object reachable through its bounds
-            for corner in obj.bound_box:
-                points.append(mw @ Vector(corner))
+            if len(indices) < vert_count:
+                # Over budget: keep the object reachable through its bounds
+                for corner in source.bound_box:
+                    points.append(mw @ Vector(corner))
+                    meta.append(_PointMeta(obj_name=obj.name, point_type="BOUNDS"))
+                points.append(mw.translation.copy())
                 meta.append(_PointMeta(obj_name=obj.name, point_type="BOUNDS"))
-            points.append(mw.translation.copy())
-            meta.append(_PointMeta(obj_name=obj.name, point_type="BOUNDS"))
+        finally:
+            if owns_mesh:
+                source.to_mesh_clear()
 
     if not points:
         return BuildResult(source_vertex_count=total_verts, limit_exceeded=limit_exceeded,

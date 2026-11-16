@@ -45,4 +45,6 @@ Then validate:
 5. Axis / plane constraint during modal (X / Y / Z, Shift+X / Y / Z)
 6. HUD updates
 7. Object mode transform application
-8. Edit mode vertex transform application
+8. Edit mode vertex transform application (also with several meshes in Edit Mode)
+9. Moving several selected objects; Adjust Last Operation (Offset)
+10. Snapping to objects with modifiers (e.g. Array)

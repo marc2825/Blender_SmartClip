@@ -26,7 +26,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-import src  # noqa: E402
+import smart_clipping  # noqa: E402
 
 STEP = 0.15  # seconds between simulated events
 
@@ -98,7 +98,7 @@ def _steps():
     win, area, region, rv3d = _view3d()
     scene = bpy.context.scene
     scene.smartclip_enabled = True
-    scene.target_scope = "SELF"  # Object Mode + SELF = no snap targets
+    scene.smartclip_target_scope = "SELF"  # Object Mode + SELF = no snap targets
 
     _parent, child, target = _setup_scene()
     rv3d.view_perspective = "PERSP"
@@ -193,12 +193,39 @@ def _steps():
     check("x_constraint_world_space",
           abs(delta.y) < 1e-4 and abs(delta.z) < 1e-4 and abs(delta.x) > 0.01,
           f"delta {tuple(round(v, 4) for v in delta)}")
+    # The final offset is stored for the Adjust Last Operation (redo) panel.
+    ops_done = bpy.context.window_manager.operators
+    last = ops_done[-1] if len(ops_done) else None
+    check("redo_offset_recorded",
+          last is not None and last.bl_idname == "VIEW3D_OT_smartclip_move"
+          and (Vector(last.properties.offset) - delta).length < 1e-4,
+          f"{last.bl_idname if last else None}")
     child.location = start_loc
     bpy.context.view_layer.update()
     yield STEP
 
+    # 3b. Every selected object moves by the same world delta
+    target_start = target.matrix_world.translation.copy()
+    target.select_set(True)
+    yield from start_modal("multi_select")
+    ev("MOUSEMOVE", "NOTHING", dx=70, dy=-20)
+    yield STEP
+    ev("LEFTMOUSE", "PRESS")
+    ev("LEFTMOUSE", "RELEASE")
+    yield STEP
+    d_child = world() - start_world
+    d_target = target.matrix_world.translation - target_start
+    check("multi_select_moves_together",
+          d_child.length > 0.01 and (d_child - d_target).length < 1e-4,
+          f"child {tuple(round(v, 3) for v in d_child)} target {tuple(round(v, 3) for v in d_target)}")
+    child.location = start_loc
+    target.matrix_world.translation = target_start
+    target.select_set(False)
+    bpy.context.view_layer.update()
+    yield STEP
+
     # 4. Hard snap (hold RMB) lands exactly on a target vertex
-    scene.target_scope = "VISIBLE"
+    scene.smartclip_target_scope = "VISIBLE"
     vertex = target.matrix_world @ target.data.vertices[0].co
     to_vertex = px(vertex) - px(start_world)
     yield from start_modal("hard_snap")
@@ -215,7 +242,7 @@ def _steps():
     check("esc_after_snap_restores", (child.location - start_loc).length < 1e-6)
 
     # 5. Edit Mode: move one vertex, ESC restores it
-    scene.target_scope = "SELF"
+    scene.smartclip_target_scope = "SELF"
     with bpy.context.temp_override(window=win, area=area, region=region):
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="DESELECT")
@@ -244,8 +271,8 @@ def _steps():
 def main():
     tee = _StderrTee(sys.stderr)
     sys.stderr = tee
-    if not hasattr(bpy.types.Scene, "target_scope"):
-        src.register()
+    if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
+        smart_clipping.register()
 
     steps = _steps()
 

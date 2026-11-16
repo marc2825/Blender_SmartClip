@@ -26,9 +26,19 @@ def screen_to_world(region, rv3d, mouse_xy, depth_location) -> Vector:
     return region_2d_to_location_3d(region, rv3d, mouse_xy, depth_location)
 
 
-def world_delta_to_local(obj, world_delta: Vector) -> Vector:
-    """Convert a world-space translation delta to object-local (mesh) space."""
-    return obj.matrix_world.inverted_safe().to_3x3() @ world_delta
+def pixel_world_size(region, rv3d, world_co) -> "float | None":
+    """World-space length of one screen pixel at the depth of *world_co*.
+
+    ``None`` when *world_co* is behind the viewpoint.
+    """
+    screen = world_to_screen(region, rv3d, world_co)
+    if screen is None:
+        return None
+    a = screen_to_world(region, rv3d, screen, world_co)
+    b = screen_to_world(region, rv3d, screen + Vector((1.0, 0.0)), world_co)
+    if a is None or b is None:
+        return None
+    return (b - a).length
 
 
 def world_to_location_matrix(obj) -> Matrix:
