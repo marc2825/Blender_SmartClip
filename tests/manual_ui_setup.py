@@ -124,7 +124,7 @@ def main():
     print("[ Axis Align ]      N-Panel Axis Align Z ON → move freely → z=4.0 suggested (SC_Near_Z).")
     print("                    Switch to X → x=4.0 suggested (SC_Near_X / SC_Diag).")
     print("[ Constraint ]      During modal: X/Y/Z = axis lock, Shift+X/Y/Z = plane lock (toggle).")
-    print("[ Bounds ]          N-Panel runtime info should show 'Box Mode' (SC_Heavy_100k).")
+    print("[ Budget ]          N-Panel runtime info shows 'Budget exceeded' (SC_Heavy_100k is sampled).")
     print("[ Collection ]      Scope=COLLECTION, col=SC_Manual_Refs → only SC_COL_A/B as targets.")
     print("[ Edit Mode ]       Tab → select verts → Shift+G → selected move, unselected snap.")
     print(f"\n  Heavy: {heavy.name}, verts={len(heavy.data.vertices)}")
