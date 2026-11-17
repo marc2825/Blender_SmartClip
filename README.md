@@ -1,4 +1,4 @@
-# Smart Clipping (Blender Addon) v1.2.0
+# Smart Clipping (Blender Addon) v1.2.1
 
 ![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)
 [![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=release)](https://github.com/marc2825/Blender_SmartClip/releases/latest)

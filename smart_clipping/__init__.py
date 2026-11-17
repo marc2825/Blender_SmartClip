@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Smart Clipping",
     "author": "marc2825",
-    "version": (1, 2, 0),
+    "version": (1, 2, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Smart Clipping",
     "description": "Move with smart guides: KD-Tree snapping, axis align and constraints",
