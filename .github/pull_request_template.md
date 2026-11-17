@@ -1,18 +1,15 @@
 ## Summary
 
-- What changed:
-- Why:
+What changed and why:
 
 ## Testing
 
-- [ ] Headless tests run:
-  - `blender --background --factory-startup --python tests/headless_test_runner.py`
-- [ ] Manual validation (if UI behavior changed):
-  - `blender --python tests/manual_ui_setup.py`
-- [ ] Logs/screenshots attached when relevant
+See [docs/DEVELOPMENT.md](https://github.com/marc2825/Blender_SmartClip/blob/main/docs/DEVELOPMENT.md#tests) for the commands.
+
+- [ ] Headless tests (`tests/headless_test_runner.py`)
+- [ ] UI test (`tests/ui_operator_test.py`) or manual check (`tests/manual_ui_setup.py`) if behavior in the viewport changed
 
 ## Checklist
 
-- [ ] No unrelated files included
-- [ ] `CHANGELOG.md` updated for user-facing changes
-- [ ] Backward compatibility impact evaluated
+- [ ] `CHANGELOG.md` updated under `[Unreleased]` for user-facing changes
+- [ ] Compatibility impact considered (saved files, preferences, supported Blender versions)

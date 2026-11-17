@@ -1,21 +1,5 @@
 # Support
 
-## Where to Ask Questions
+Ask usage questions and share ideas in [Discussions](https://github.com/marc2825/Blender_SmartClip/discussions). Report bugs you can reproduce in [Issues](https://github.com/marc2825/Blender_SmartClip/issues).
 
-- Use GitHub Discussions (recommended) for usage questions and ideas.
-- Use GitHub Issues for confirmed bugs and actionable feature requests.
-
-## Before Opening an Issue
-
-1. Check existing issues.
-2. Confirm Blender version is 4.0+.
-3. Reproduce with a clean scene when possible.
-4. Attach logs and minimal repro steps.
-
-## Useful Data for Debugging
-
-- Blender version
-- OS and version
-- Addon version
-- `target_scope` and `max_vertex_budget` settings
-- Console output from Smart Clipping operations
+Before opening an issue, check the existing issues and the [troubleshooting notes](docs/details.en.md#troubleshooting) ([日本語](docs/details.md#困ったとき)). A report is easiest to act on when it includes your Blender, add-on, and OS versions, the Target Scope and Max Vertex Budget settings, steps that reproduce the problem in a simple scene, and any error shown in the system console.
