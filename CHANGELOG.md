@@ -6,18 +6,29 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Fixed
+
+- Object Mode with Target Scope set to Selected had no snap targets in 1.2.0, because every selected object moved. Now only the active object moves and the other selected objects are the targets.
+
+### Maintenance
+
+- CI caches the Blender download and falls back to mirrors, verified against blender.org checksums, when download.blender.org refuses a request.
+
 ## [1.2.0] - 2026-11-16
 
 ### Upgrading from 1.1.x
+
 - The add-on module is now `smart_clipping` (was `src`) and the download is `smart_clipping-v1.2.0.zip`. Remove the old add-on before installing. Add-on preferences reset to defaults; scene settings saved in `.blend` files carry over automatically.
 - Scene properties for scripts are renamed: `target_scope` / `target_collection` → `smartclip_target_scope` / `smartclip_target_collection`.
 
 ### Added
+
 - Moves all selected objects (Object Mode) and the selected vertices of every mesh in Edit Mode.
 - Snaps to geometry with modifiers applied.
 - The final move can be adjusted as `Offset` in the Adjust Last Operation panel.
 
 ### Fixed
+
 - Parented objects drifted from the cursor and snapped to the wrong place. (#8)
 - The selection jumped after orbiting, panning or zooming mid-move.
 - Snapping could break an axis / plane constraint.
@@ -26,27 +37,32 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - An aborted move could leave guides on screen; `COLLECTION` scope skipped child collections; plane constraints showed no guide lines. (#8)
 
 ### Changed
+
 - The object that exceeds the vertex budget is down-sampled instead of reduced to its bounding box. (#8)
 - The search radius follows the view scale and per-move cost is capped. (#8)
 - Blender's built-in `Shift+G` is no longer disabled; Smart Clipping's hotkey just takes precedence while it is enabled.
 - Guide lines keep their width on Metal / Vulkan.
 
 ### Maintenance
+
 - CI on Blender 4.0 / 4.2 LTS / 5.2 LTS, GitHub Actions updated (#5, #6), version files checked against `bl_info` (#7).
 
 ## [1.1.0] - 2026-02-26
 
 ### Added
+
 - **Axis Align mode**: X / Y / Z toggles in the N-Panel snap the moving object/vertex to the corresponding axis coordinate of nearby reference vertices (instead of snapping to exact vertex positions).
 - **Axis / plane constraint during modal**: Press `X` / `Y` / `Z` to lock movement to a single axis, or `Shift+X` / `Shift+Y` / `Shift+Z` to lock to a plane — same behaviour as Blender's native `G` → `X`/`Y`/`Z`. Toggle the same key again to return to free movement. Works together with Soft Snap, Hard Snap, and Axis Align.
 - Colored constraint axis line in the viewport (red=X, green=Y, blue=Z) while a constraint is active.
 - HUD now shows the active constraint (`Axis: X` / `Plane: YZ`) in addition to snap info.
 
 ### Changed
+
 - **Hard Snap changed from Ctrl to right-click hold**: Hold right mouse button during modal to hard-snap to the nearest candidate. ESC is now the sole cancel key.
 - Snap candidate search now uses the projected position of the moving vertex/object (not the raw mouse cursor) as the screen-space filter reference, fixing offset snap detection when the cursor is not aligned with the geometry.
 
 ### Fixed
+
 - In Edit Mode, only the selected (moving) vertices are excluded from snap candidates; unselected vertices of the same mesh remain as valid snap targets.
 - Axis Align guide line now draws correctly from the current position to the alignment point (solid line), with a dashed line continuing to the reference vertex.
 - Headless test `case_scene_properties_registered` used wrong property names (`src_enabled`, `src_runtime_info`); corrected to `smartclip_enabled`, `smartclip_runtime_info`, and added checks for `smartclip_align_x/y/z`.
@@ -54,6 +70,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ## [1.0.0] - 2026-02-08
 
 ### Added
+
 - Initial Smart Clipping addon implementation.
 - Modal move operator with static KD-tree snapshot.
 - Vertex budget fallback to bounds mode for large scenes.

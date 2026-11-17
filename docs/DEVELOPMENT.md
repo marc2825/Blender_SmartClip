@@ -2,26 +2,45 @@
 
 This guide is for working on the add-on itself. For installing and using it, see the [README](../README.en.md).
 
-The add-on lives in `smart_clipping/`: `ops.py` holds the modal move operator, `detector.py` builds the snap tree and searches it, `drawing.py` draws the guides and HUD, and `prefs.py` and `utils.py` hold preferences and shared helpers. Tests are in `tests/` and release scripts in `scripts/`. The scripts need only a regular Python 3 interpreter; the add-on and tests run inside Blender.
+## Layout
+
+| Path | Contents |
+|---|---|
+| `smart_clipping/ops.py` | The modal move operator: what moves, input handling, snapping |
+| `smart_clipping/detector.py` | Building the snap tree and searching it |
+| `smart_clipping/drawing.py` | Guide lines and HUD |
+| `smart_clipping/prefs.py`, `utils.py` | Preferences and shared helpers |
+| `smart_clipping/__init__.py` | `bl_info`, panel, keymaps, scene properties and their migration |
+| `tests/` | Headless tests, the UI test, and a scene for manual checks |
+| `scripts/` | Version check and release packaging (plain Python 3, no Blender needed) |
 
 ## Tests
 
-The headless tests cover the snap tree, candidate search, and the operator's `execute` without opening a window. CI runs them on every pull request.
+### Headless
+
+Covers the snap tree, candidate search, and the operator's `execute` without a window. CI runs it on every pull request.
 
 ```sh
 blender --background --factory-startup --python tests/headless_test_runner.py
 blender --background --factory-startup --python tests/headless_test_runner.py -- --case stress_100k
 ```
 
-The case names are the keys of `CASES` in the runner. The runner exits with status 1 if any case fails.
+Case names are the keys of `CASES` in the runner. It exits with status 1 if any case fails.
 
-The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` starts Blender's UI, feeds it simulated input (`Shift+G`, mouse moves, constraint keys, clicks, `Esc`), and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, hard snap, and Edit Mode. It needs a display, and real mouse and keyboard input is ignored while it runs. Set `SMARTCLIP_UI_SCREENSHOT_DIR` to a folder to save screenshots of the overlays.
+### UI
+
+The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+G`, mouse moves, constraint keys, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, hard snap, and Edit Mode.
 
 ```sh
 blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
 ```
 
-How snapping feels is still worth checking by hand after UI changes. `tests/manual_ui_setup.py` builds a scene with targets along each axis, a grid that exceeds the vertex budget, and a collection for Manual Collection scope, and prints what to try.
+- It needs a display, and real mouse and keyboard input is ignored while it runs.
+- Set `SMARTCLIP_UI_SCREENSHOT_DIR` to a folder to save screenshots of the overlays.
+
+### Manual
+
+How snapping feels is still worth checking by hand after UI changes. `tests/manual_ui_setup.py` builds a scene with targets along each axis, a grid that exceeds the vertex budget, and a collection for Manual Collection scope, then prints what to try.
 
 ```sh
 blender --python tests/manual_ui_setup.py
@@ -29,17 +48,34 @@ blender --python tests/manual_ui_setup.py
 
 ## CI
 
-`.github/workflows/blender-ci.yml` runs on pushes to `main` and on pull requests. It checks version consistency, compiles every Python file, and runs the headless tests on Blender 4.0.2 (the oldest supported version), 4.2.23, and 5.2.4. CodeQL (`codeql.yml`) scans the Python code on the same events and once a month. Dependabot proposes GitHub Actions updates monthly.
+| Workflow | Runs on | What it does |
+|---|---|---|
+| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, compile check, headless tests on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4 |
+| `codeql.yml` | Pushes, pull requests, monthly | CodeQL scan of the Python code |
+| `release-addon.yml` | `v*.*.*` tags, manual runs | Packages and publishes a release (see below) |
+
+Dependabot proposes GitHub Actions updates monthly.
+
+`blender-ci.yml` caches the Blender archive per version. On a cache miss it downloads from download.blender.org, falls back to mirrors, and checks the archive against the checksum published on blender.org.
 
 ## Versions
 
-`bl_info["version"]` in `smart_clipping/__init__.py` is the single source of truth. `python scripts/versioning.py` checks that the newest released entry in `CHANGELOG.md`, `version` and `date-released` in `CITATION.cff`, and the title line of `README.md` agree with it. The project follows Semantic Versioning.
+`bl_info["version"]` in `smart_clipping/__init__.py` is the single source of truth, and the project follows Semantic Versioning.
+
+`python scripts/versioning.py` checks that these agree with it:
+
+- the newest released entry in `CHANGELOG.md`
+- `version` and `date-released` in `CITATION.cff`
+- the title line of `README.md`
 
 ## Releasing
 
-1. Bump `bl_info["version"]`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff` and the README title. The changelog section becomes the body of the GitHub release, so keep it short and written for users. Run `python scripts/versioning.py`.
-2. Merge to `main` with CI passing. To preview the package, `gh workflow run release-addon.yml -f version=X.Y.Z` builds the ZIP, its checksum, and the release notes as a workflow artifact without publishing anything.
-3. Tag the release commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release Addon workflow fails if the tag does not match `bl_info`; otherwise it publishes the release with `smart_clipping-vX.Y.Z.zip` and `.sha256` attached.
-4. Install the published ZIP in Blender once to confirm it loads.
+1. Bump `bl_info["version"]`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff` and the README title. Run `python scripts/versioning.py`.
+2. Merge to `main` with CI passing.
+3. Optionally preview the package: `gh workflow run release-addon.yml -f version=X.Y.Z` builds the ZIP, checksum, and release notes as a workflow artifact without publishing anything.
+4. Tag the release commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+5. Install the published ZIP in Blender once to confirm it loads.
+
+The changelog section becomes the body of the GitHub release, so keep it short and written for users. The release workflow fails if the tag does not match `bl_info`; otherwise it attaches `smart_clipping-vX.Y.Z.zip` and `.sha256`.
 
 `python scripts/package_addon.py` builds the same ZIP locally in `dist/`.
