@@ -117,7 +117,7 @@ def main():
 
     print("\n=== Smart Clipping Manual Validation Scene ===")
     print("  SC_Active (origin) | SC_Near_X/Y/Z | SC_Diag | SC_COL_A/B | SC_Heavy_100k")
-    print("  Scope=VISIBLE, budget=50000, snap_px=30  |  See tests/TESTS_OVERVIEW.txt")
+    print("  Scope=VISIBLE, budget=50000, snap_px=30  |  See docs/DEVELOPMENT.md")
     print("")
     print("[ Soft/Hard Snap ]  Shift+G → move near SC_Near_* → soft pull (purple).")
     print("                    Hold RMB near candidate → hard snap (cyan). LMB/Enter=confirm, ESC=cancel.")
