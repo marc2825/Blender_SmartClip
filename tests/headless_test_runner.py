@@ -546,6 +546,7 @@ def case_execute_moves_all_selected():
     _clear_scene()
     scene = bpy.context.scene
     scene.smartclip_enabled = True
+    scene.smartclip_target_scope = "VISIBLE"
     parent = _add_cube("Ex_Parent", (0.0, 0.0, 0.0))
     parent.rotation_euler = (0.0, 0.0, 0.7)
     child = _add_cube("Ex_Child", (2.0, 0.0, 0.0))
@@ -580,6 +581,40 @@ def case_execute_moves_all_selected():
     moved = locked.matrix_world.translation - before["Ex_Locked"]
     assert (moved - Vector((1.0, 0.0, 3.0))).length < 1e-4, moved  # Y locked
     assert (unselected.matrix_world.translation - before["Ex_Unselected"]).length < 1e-9
+
+
+def case_selected_scope_moves_active_only():
+    _clear_scene()
+    scene = bpy.context.scene
+    scene.smartclip_enabled = True
+    scene.smartclip_target_scope = "SELECTED"
+    active = _add_cube("SS_Active", (0.0, 0.0, 0.0))
+    child = _add_cube("SS_ActiveChild", (0.0, 3.0, 0.0))
+    child.parent = active
+    target = _add_cube("SS_Target", (4.0, 0.0, 0.0))
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in (active, child, target):
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = active
+    bpy.context.view_layer.update()
+    target_before = target.matrix_world.translation.copy()
+    child_before = child.matrix_world.translation.copy()
+
+    # Selected scope snaps the active object to the other selected objects:
+    # only the active object (with its child) moves, the rest are targets.
+    pivot, movers = ops.gather_movers(bpy.context)
+    assert [m.obj.name for m in movers] == ["SS_Active"]
+    with _temporary_budget(100000):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active,
+                                             exclude_objects=[m.obj for m in movers])
+    assert {m.obj_name for m in result.point_meta} == {"SS_Target"}
+
+    delta = Vector((0.0, 0.0, 1.5))
+    _run_move(delta)
+    bpy.context.view_layer.update()
+    assert (active.matrix_world.translation - delta).length < 1e-5
+    assert (child.matrix_world.translation - child_before - delta).length < 1e-5
+    assert (target.matrix_world.translation - target_before).length < 1e-9
 
 
 def case_execute_edit_mode_multi_object():
@@ -694,6 +729,7 @@ CASES = {
     "object_mode_excludes_movers": case_object_mode_excludes_movers_and_children,
     "evaluated_mesh_targets": case_evaluated_mesh_targets,
     "execute_moves_all_selected": case_execute_moves_all_selected,
+    "selected_scope_moves_active_only": case_selected_scope_moves_active_only,
     "execute_edit_multi_object": case_execute_edit_mode_multi_object,
     "legacy_prop_migration": case_legacy_scene_property_migration,
     "pixel_world_size": case_pixel_world_size,

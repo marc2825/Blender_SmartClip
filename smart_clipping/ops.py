@@ -158,8 +158,10 @@ def gather_movers(context):
     """Return ``(pivot_world, movers)`` for the current selection.
 
     Object Mode: every selected editable object (falling back to the active
-    one); children of a moving parent are left to the parent.  The pivot is
-    the active object's origin when it moves, otherwise the median origin.
+    one); children of a moving parent are left to the parent.  With Target
+    Scope set to Selected only the active object moves, because the other
+    selected objects are what it snaps to.  The pivot is the active object's
+    origin when it moves, otherwise the median origin.
 
     Edit Mode: the selected vertices of every mesh in Edit Mode; the pivot
     is their median point.  ``movers`` is empty when nothing would move.
@@ -187,7 +189,8 @@ def gather_movers(context):
         return pivot, movers
 
     selected = list(context.selected_editable_objects)
-    if not selected and active is not None:
+    snaps_to_selection = getattr(context.scene, "smartclip_target_scope", None) == "SELECTED"
+    if active is not None and (snaps_to_selection or not selected):
         selected = [active]
     moving_ptrs = {obj.as_pointer() for obj in selected}
     roots = [obj for obj in selected if not _has_moving_ancestor(obj, moving_ptrs)]
