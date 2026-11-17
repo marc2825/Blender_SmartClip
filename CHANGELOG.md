@@ -6,13 +6,19 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-18
+
 ### Fixed
 
-- Object Mode with Target Scope set to Selected had no snap targets in 1.2.0, because every selected object moved. Now only the active object moves and the other selected objects are the targets.
+- In Object Mode, Target Scope = Selected found no snap targets in 1.2.0 because every selected object moved. Now only the active object moves and snaps to the other selected objects, as in 1.1.x.
+
+### Changed
+
+- Documentation reorganized: English README in `README.en.md`, behavior details and troubleshooting in `docs/details.md`, developer guide in `docs/DEVELOPMENT.md`.
 
 ### Maintenance
 
-- CI caches the Blender download and falls back to mirrors, verified against blender.org checksums, when download.blender.org refuses a request.
+- CI caches the Blender download and falls back to mirrors, verified against blender.org checksums.
 
 ## [1.2.0] - 2026-11-16
 
