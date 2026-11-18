@@ -190,14 +190,12 @@ def run_scenario(impl, kind, n, scale, queries, rng):
         tol = 1e-6 * max(1.0, scale)
         if cands and np.linalg.norm(np.array(tuple(cands[0].location)) - coords[best]) < tol:
             agree += 1
+        # Candidate locations are mathutils Vectors (float32): compare the
+        # ground truth at the same precision, exactly.
         found = find_all(impl, result, co, region, rv3d, mouse, radius)
-        found_locs = np.round(np.array([tuple(c.location) for c in found]) / tol) if found else None
-        gt_locs = np.round(coords[gt_idx] / tol)
-        if found_locs is None:
-            coverage.append(0.0)
-        else:
-            found_set = {tuple(r) for r in found_locs}
-            coverage.append(sum(tuple(r) in found_set for r in gt_locs) / len(gt_locs))
+        found_set = {tuple(np.float32(v) for v in c.location) for c in found}
+        gt_locs = coords[gt_idx].astype(np.float32)
+        coverage.append(sum(tuple(r) in found_set for r in gt_locs) / len(gt_locs))
 
     times_ms = np.array(times) * 1000.0
     return {
