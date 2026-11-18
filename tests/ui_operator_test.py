@@ -7,7 +7,8 @@ Usage:
   blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
 
 Set SMARTCLIP_UI_SCREENSHOT_DIR to save screenshots of the overlays
-(constraint.png, hard_snap.png) for visual inspection.
+(constraint.png, hard_snap.png) for visual inspection, and SMARTCLIP_UI_STEP
+to wait longer between simulated events on slow (software) OpenGL.
 
 Exit code 0 = all checks passed, 1 = failures.
 """
@@ -28,7 +29,9 @@ if ROOT_DIR not in sys.path:
 
 import smart_clipping  # noqa: E402
 
-STEP = 0.15  # seconds between simulated events
+# Seconds between simulated events.  Software OpenGL on a virtual display
+# redraws slowly, so CI sets SMARTCLIP_UI_STEP higher.
+STEP = float(os.environ.get("SMARTCLIP_UI_STEP", "0.15"))
 
 _results = []
 _TEE = None

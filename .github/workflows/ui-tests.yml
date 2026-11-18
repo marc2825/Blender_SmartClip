@@ -55,6 +55,7 @@ jobs:
       - name: Run UI Test on a Virtual Display
         env:
           SMARTCLIP_UI_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
+          SMARTCLIP_UI_STEP: "0.8"
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           set -euxo pipefail
