@@ -50,10 +50,21 @@ _NAVIGATION_EVENTS = {
 # module level so unregister() can remove leftovers even if an operator
 # instance died without cleaning up.
 _live_draw_handles: list = []
+# Movers of moves in progress.  Unregistering the operator class drops its
+# running modal handler without calling cancel(), so unregister() restores
+# these itself.
+_running_moves: list = []
 
 
 def remove_all_draw_handlers():
-    """Remove every draw handler installed by this module (used on unregister)."""
+    """Undo moves in progress and remove every draw handler (used on unregister)."""
+    for movers in list(_running_moves):
+        for mover in movers:
+            try:
+                mover.restore()
+            except Exception:
+                traceback.print_exc()
+    _running_moves.clear()
     for handle in _live_draw_handles:
         try:
             bpy.types.SpaceView3D.draw_handler_remove(handle, "WINDOW")
@@ -308,6 +319,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self._add_draw_handlers()
 
         context.window_manager.modal_handler_add(self)
+        _running_moves.append(self._movers)
         return {"RUNNING_MODAL"}
 
     # --------------------------------------------------------------- modal
@@ -587,6 +599,8 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
     def _finish(self, context):
         self._remove_draw_handlers()
+        if any(m is self._movers for m in _running_moves):
+            _running_moves[:] = [m for m in _running_moves if m is not self._movers]
         if context.area:
             context.area.tag_redraw()
 
