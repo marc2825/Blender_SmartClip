@@ -166,6 +166,9 @@ def gather_movers(context):
     Edit Mode: the selected vertices of every mesh in Edit Mode; the pivot
     is their median point.  ``movers`` is empty when nothing would move.
     """
+    # matrix_world can be stale (right after undo, or when a script changed
+    # transforms); the parent-space conversion relies on it.
+    context.view_layer.update()
     active = context.active_object
 
     if context.mode == "EDIT_MESH":
