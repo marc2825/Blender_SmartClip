@@ -77,10 +77,18 @@ def _draw_lines(coords, color, width):
     batch.draw(shader)
 
 
+def _point_shader():
+    try:
+        return gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
+    except ValueError:
+        # Blender 4.0 has no point shader; square points via UNIFORM_COLOR.
+        return gpu.shader.from_builtin("UNIFORM_COLOR")
+
+
 def _draw_points(coords, color, size):
     if not coords:
         return
-    shader = gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
+    shader = _point_shader()
     batch = batch_for_shader(shader, "POINTS", {"pos": coords})
     shader.bind()
     shader.uniform_float("color", color)
