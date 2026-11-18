@@ -64,14 +64,19 @@ def main() -> int:
     zip_path = output_dir / f"{ADDON_DIR}-v{version}.zip"
     checksum_path = output_dir / f"{ADDON_DIR}-v{version}.sha256"
 
+    # Fixed order, timestamps and permissions: the same sources always give a
+    # byte-identical ZIP (and checksum).
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_path in sorted(addon_dir.rglob("*")):
             if file_path.is_dir():
                 continue
             if "__pycache__" in file_path.parts or file_path.suffix == ".pyc":
                 continue
-            arc_path = file_path.relative_to(root).as_posix()
-            zf.write(file_path, arc_path)
+            info = zipfile.ZipInfo(file_path.relative_to(root).as_posix(),
+                                   date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            zf.writestr(info, file_path.read_bytes())
 
     checksum = sha256_file(zip_path)
     checksum_path.write_text(f"{checksum}  {zip_path.name}\n", encoding="utf-8")

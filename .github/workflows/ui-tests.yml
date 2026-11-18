@@ -1,0 +1,73 @@
+name: UI Tests
+
+# Runs tests/ui_operator_test.py (simulated mouse and keyboard input in a real
+# Blender window) on a virtual display.  Manual only for now: it has not been
+# validated on GitHub-hosted runners yet, and a flaky GUI job should not block
+# pull requests.  Make it a required check once it has proven stable.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui-tests:
+    name: ui-tests (Blender ${{ matrix.blender }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # drawing differs between versions (4.0 has no point shader)
+          - blender: "4.0.2"
+            gpu_args: ""
+          - blender: "5.2.4"
+            gpu_args: "--gpu-backend opengl"
+    env:
+      BLENDER_VERSION: ${{ matrix.blender }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Display and OpenGL Dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb mesa-utils libgl1-mesa-dri libegl1 libgl1 \
+            libx11-6 libxrender1 libxrandr2 libxfixes3 libxi6 libxkbcommon0 \
+            libxkbcommon-x11-0 libxxf86vm1 libsm6 libdbus-1-3
+
+      - name: Restore Blender Archive
+        uses: actions/cache@v6
+        with:
+          path: |
+            blender-${{ matrix.blender }}-linux-x64.tar.xz
+            blender-${{ matrix.blender }}.sha256
+          key: blender-${{ matrix.blender }}-linux-x64-v2
+
+      - name: Download and Install Blender
+        run: |
+          set -euxo pipefail
+          bash .github/scripts/fetch-blender.sh "${BLENDER_VERSION}"
+          tar -xf "blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+
+      - name: Run UI Test on a Virtual Display
+        env:
+          SMARTCLIP_UI_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          set -euxo pipefail
+          mkdir -p "${SMARTCLIP_UI_SCREENSHOT_DIR}"
+          xvfb-run -a -s "-screen 0 1920x1080x24" \
+            "blender-${BLENDER_VERSION}-linux-x64/blender" --factory-startup \
+              --enable-event-simulate ${{ matrix.gpu_args }} \
+              --python tests/ui_operator_test.py
+
+      - name: Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-test-screenshots-${{ matrix.blender }}
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
