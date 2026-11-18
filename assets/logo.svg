@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="220" viewBox="0 0 800 220" role="img" aria-labelledby="logo-title">
+  <title id="logo-title">Smart Clipping</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d3036"/>
+      <stop offset="1" stop-color="#1b1d21"/>
+    </linearGradient>
+    <pattern id="grid" width="22" height="22" patternUnits="userSpaceOnUse">
+      <path d="M22 0H0V22" fill="none" stroke="#ffffff" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="220" rx="24" fill="url(#bg)"/>
+  <rect width="800" height="220" rx="24" fill="url(#grid)"/>
+
+  <g transform="translate(40 0)">
+  <!-- reference cube -->
+  <g stroke="#8b949e" stroke-width="2" stroke-linejoin="round">
+    <path d="M100 66 L145 92 L100 118 L55 92 Z" fill="#4a5059"/>
+    <path d="M55 92 L100 118 L100 170 L55 144 Z" fill="#373c43"/>
+    <path d="M100 118 L145 92 L145 144 L100 170 Z" fill="#2c3036"/>
+  </g>
+
+  <!-- moving cube (selected: Blender's orange outline) -->
+  <g stroke="#ffa033" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M215 66 L244.4 83 L215 100 L185.6 83 Z" fill="#5b6270"/>
+    <path d="M185.6 83 L215 100 L215 134 L185.6 117 Z" fill="#444a55"/>
+    <path d="M215 100 L244.4 83 L244.4 117 L215 134 Z" fill="#383d47"/>
+  </g>
+
+  <!-- smart guide aligning the top vertices -->
+  <line x1="36" y1="66" x2="266" y2="66" stroke="#ff3dff" stroke-width="2" stroke-dasharray="7 5" stroke-linecap="round"/>
+  <circle cx="100" cy="66" r="4.5" fill="#ff3dff"/>
+
+  <!-- snap point -->
+  <circle cx="215" cy="66" r="10" fill="#00e5ff" opacity="0.55" filter="url(#glow)"/>
+  <circle cx="215" cy="66" r="5.5" fill="#00e5ff"/>
+
+  <!-- wordmark -->
+  <text x="300" y="112" fill="#f2f4f7" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="54" font-weight="700" letter-spacing="0.5">Smart Clipping</text>
+  <text x="302" y="150" fill="#a5adb8" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="21">Smart guides and snapping for Blender</text>
+  </g>
+</svg>

@@ -1,6 +1,60 @@
-# How it works and troubleshooting
+# Guide
 
-This page adds detail to [Usage](../README.en.md#usage) in the README.
+This page expands on [Usage](../README.en.md#usage) in the README.
+
+## Controls
+
+| Input | Action |
+|---|---|
+| `Shift+G` / **Smart Clipping Move** in the panel | Start a move |
+| Left click / `Enter` | Confirm |
+| `Esc` | Cancel and restore the original position |
+| Hold right mouse button | Sit exactly on the candidate (hard snap) |
+| `X` / `Y` / `Z` | Move along that axis only |
+| `Shift+X` / `Shift+Y` / `Shift+Z` | Move in the plane excluding that axis |
+| Middle mouse / wheel | Orbit, pan, or zoom without ending the move |
+
+Press the same key again to release an axis or plane constraint. Constraints use the global axes; a constrained axis is drawn in red (X), green (Y), or blue (Z), and snapped positions stay on the constrained axis or plane.
+
+Close to a candidate, the selection is pulled toward it, more strongly the closer it gets (soft snap). The guide lines and the lower-left HUD show which object you are heading for and the distance.
+
+## What moves and what snaps
+
+| Mode | What moves | What snaps |
+|---|---|---|
+| Object Mode | All selected objects (only the active one when Target Scope is Selected) | The active object's origin |
+| Edit Mode | Selected vertices of the meshes being edited | The center of the selected vertices |
+
+After confirming, correct the move numerically with **Offset** in the **Adjust Last Operation** panel.
+
+## Target Scope
+
+| Target Scope | Snap targets |
+|---|---|
+| Self Only | The mesh being edited. Use it in Edit Mode to snap to other vertices of the same mesh |
+| Selected | Selected meshes other than the active one |
+| All Visible (default) | Every visible mesh |
+| Manual Collection | Meshes in the chosen collection and its child collections |
+
+## Axis Align
+
+Turning on X, Y, or Z under **Axis Align** in the panel aligns to that axis's coordinate values instead of vertex positions. With Z on, for example, a vertex at z = 1 offers z = 1 as a candidate while X and Y stay where they are. A dashed line leads to the vertex the value comes from.
+
+- With several axes on, only one axis is aligned at a time.
+- A value is a candidate only if the aligned position is within Snap Threshold on screen.
+- An axis nearly parallel to the view direction, such as Z in top view, is skipped.
+
+## Preferences
+
+Set in **Preferences → Add-ons → Smart Clipping**.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Snap Threshold (px) | 30 | Screen distance within which candidates are found |
+| Max Vertex Budget | 50,000 | Maximum number of vertices registered as snap targets ([Vertex budget](#vertex-budget)) |
+| Guide Color / Hard Snap Color | Magenta / cyan | Colors of the guides and HUD (the second during hard snap) |
+
+**Add Default Hotkeys** and **Clear Hotkeys** on the same page restore or remove the `Shift+G` assignment.
 
 ## How snap targets are built
 

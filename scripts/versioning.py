@@ -13,7 +13,8 @@ Print the CHANGELOG section of a version (used as GitHub release notes):
 Checks:
   - CHANGELOG.md: newest released entry is ``## [X.Y.Z] - YYYY-MM-DD``
   - CITATION.cff: ``version`` and ``date-released`` match that entry
-  - README.md:    title line ends with ``vX.Y.Z``
+
+The README shows the version through the release badge, so it is not checked.
 """
 
 from __future__ import annotations
@@ -88,10 +89,6 @@ def check(root: Path = ROOT) -> "list[str]":
         problems.append(f"CITATION.cff version is {cff_version}, bl_info is {version}")
     if cl_date and cff_date != cl_date:
         problems.append(f"CITATION.cff date-released is {cff_date}, CHANGELOG [{cl_version}] is {cl_date}")
-
-    readme_title = (root / "README.md").read_text(encoding="utf-8").splitlines()[0]
-    if not readme_title.rstrip().endswith(f"v{version}"):
-        problems.append(f"README.md title '{readme_title}' does not end with v{version}")
 
     return problems
 

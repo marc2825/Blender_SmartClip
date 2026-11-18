@@ -1,116 +1,63 @@
-# Smart Clipping (Blender Addon) v1.2.1
+<p align="center">
+  <img src="assets/logo.svg" alt="Smart Clipping" width="720">
+</p>
 
-![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)
-[![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=release)](https://github.com/marc2825/Blender_SmartClip/releases/latest)
-[![License](https://img.shields.io/github/license/marc2825/Blender_SmartClip)](https://github.com/marc2825/Blender_SmartClip/blob/main/LICENSE)
+# Smart Clipping
 
-[English](README.en.md)
+[![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=version)](https://github.com/marc2825/Blender_SmartClip/releases/latest)
+[![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
+[![License: MIT](https://img.shields.io/github/license/marc2825/Blender_SmartClip)](LICENSE)
 
-![Demo](assets/teaser.gif)
+[日本語](README.md) | [English](README.en.md)
 
-## 概要
+オブジェクトや頂点を移動するときに、近くの頂点へのガイド線を表示し、位置合わせ（スナップ）を手伝う Blender アドオンです。PowerPoint の[スマートガイド](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3)を参考にしています。
 
-**Smart Clipping** は、Blender の移動操作を拡張するアドオンです。  
-オブジェクトや頂点を移動するときに、周囲の要素を候補として検出し、3DガイドとHUDを表示しながら、近接要素へのスナップを補助します。  
-近づいたときは Soft Snap（候補点へ徐々に引き寄せる補間）、右クリック長押しで Hard Snap（候補点へ完全に固定）を適用し、`Target Scope` で探索範囲を切り替えられます。
+![移動中のオブジェクトから近くの頂点へガイド線が伸び、スナップする様子](assets/teaser.gif)
 
-（このアドオンは、Microsoft PowerPoint の [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) にインスパイアされて誕生しました。）
-
-## 対応環境
-
-Blender 4.0 以降。自動テストは Blender 4.0、4.2 LTS、5.2 LTS で実行しています。
+> Blender 4.0 以降に対応しています。自動テストは Blender 4.0、4.2 LTS、5.2 LTS で実行しています。
 
 ## インストール
 
-1. [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) から `smart_clipping-vX.Y.Z.zip` をダウンロードします。
-2. Preferences > Add-ons の Install from Disk（Blender 4.1 以前は Install）で ZIP を選びます。
-3. Smart Clipping を有効にします。
+[Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) から `smart_clipping-vX.Y.Z.zip` を入手し、Blender の **Preferences → Add-ons → Install from Disk**（4.1 以前は **Install**）で読み込みます。ZIP は展開しないでください。
 
-### 1.1.x 以前から更新するとき
-
-1.2.0 でモジュール名が `src` から `smart_clipping` に変わりました。
-
-- 先に旧版を無効にして削除してください。両方を有効にすると登録が衝突します。
-- アドオンの設定は初期値に戻ります。
-- `.blend` に保存した Target Scope と Collection の設定は、ファイルを開いたときに引き継がれます。
+1.1.x 以前から更新するときは、先に旧版（モジュール名 `src`）を無効にして削除してください。両方を有効にすると登録が衝突します。アドオンの設定は初期値に戻りますが、`.blend` に保存した Target Scope などの設定は引き継がれます。
 
 ## 使い方
 
-3D ビューポートのサイドバー（N キー）の Tool タブに Smart Clipping パネルがあります。
+1. 3D ビューで N キーを押し、**Tool** タブの **Smart Clipping** パネルを開きます。
+2. **Target Scope** でスナップ先にするメッシュの範囲を選びます。初期値は表示中のすべてのメッシュです。
+3. オブジェクトモードかメッシュの編集モードで `Shift+G` を押し、移動を始めます。
+4. 候補の頂点に近づくと引き寄せられます。右ボタンを押している間は、候補にぴったり合わせます。
+5. 左クリックか `Enter` で確定し、`Esc` で取り消します。確定後は **Adjust Last Operation** パネルで移動量を数値で直せます。
 
-Enable Smart Clipping がオンのとき、オブジェクトモードかメッシュの編集モードで `Shift+G` を押すか、パネルの Smart Clipping Move を押すと移動が始まります。オフにすると、`Shift+G` は Blender 標準の Select Grouped / Select Similar に戻ります。
+移動中は `X` `Y` `Z` で軸に、`Shift` を付けると面に拘束できます。パネルの **Axis Align** をオンにすると、頂点の位置ではなく座標値だけをそろえます。
 
-| モード | 動かすもの | スナップさせる点 |
-|---|---|---|
-| オブジェクトモード | 選択中のオブジェクトすべて（Target Scope が Selected のときはアクティブだけ） | アクティブオブジェクトの原点 |
-| 編集モード | 編集中のメッシュの選択頂点 | 選択頂点の中心 |
+操作キーの一覧、Target Scope の選び方、設定項目は[操作ガイド](docs/details.md)にあります。
 
-### スナップ
+## 注意
 
-- Soft Snap: 候補に近づくと、近いほど強く候補へ引き寄せられます。
-- Hard Snap: 右ボタンを押している間は、候補の位置にぴったり合わせます。
+- スナップ先はメッシュの頂点だけです。移動を始めた時点の形状（モディファイア適用後）から作ります。
+- 頂点数が **Max Vertex Budget**（初期値 50,000）を超えると、遠くのオブジェクトは頂点を間引くか、バウンディングボックスの角と原点だけを候補にします。
+- **Enable Smart Clipping** をオフにすると、`Shift+G` は Blender 標準の Select Grouped / Select Similar に戻ります。
 
-向かっている候補のオブジェクト名と距離は、ガイド線と画面左下の表示で確かめられます。
+## 関連文書
 
-確定したあとは、最後の操作を調整パネルで移動量（Offset）を数値で直せます。
-
-### 操作
-
-| 操作 | 動作 |
-|---|---|
-| 左クリック / `Enter` | 確定 |
-| `Esc` | キャンセルして元の位置に戻す |
-| 右ボタンを押し続ける | Hard Snap |
-| `X` / `Y` / `Z` | その軸に沿ってだけ動かす |
-| `Shift+X` / `Shift+Y` / `Shift+Z` | その軸を除いた面の上でだけ動かす |
-| 中ボタン / ホイール | 移動を続けたままビューを回転・パン・ズーム |
-
-軸と面の拘束は、同じキーをもう一度押すと解除できます。拘束はワールド座標の軸に対して働き、拘束中の軸は X が赤、Y が緑、Z が青の線で表示されます。スナップした位置も、拘束した軸や面の上に合わせます。
-
-### スナップ先の範囲
-
-パネルの Target Scope で、スナップ先にするメッシュを選びます。
-
-| Target Scope | スナップ先 |
-|---|---|
-| Self Only | 編集中のメッシュ自身。編集モードで、同じメッシュの別の頂点に合わせるときに使います |
-| Selected | アクティブ以外の選択中のメッシュ |
-| All Visible（初期値） | 表示中のすべてのメッシュ |
-| Manual Collection | 指定したコレクションと、その子コレクションのメッシュ |
-
-### Axis Align
-
-パネルの Axis Align で X、Y、Z のどれかをオンにすると、頂点の位置ではなく、その軸の座標値にそろえます。
-
-たとえば Z をオンにしたとき、z 座標が 1 の頂点があれば、XY の位置はそのままで z = 1 にそろえる候補になります。そろえる元の頂点までは点線で表示されます。
-
-- 複数の軸をオンにしても、そろえるのは一度に 1 軸だけです。
-- そろえた後の位置が、画面上で Snap Threshold 以内に入る値だけが候補になります。
-- トップビューの Z のように、視線とほぼ平行な軸は対象外です。
-
-## 設定
-
-Preferences > Add-ons > Smart Clipping で変更できます。
-
-| 項目 | 初期値 | 内容 |
-|---|---|---|
-| Snap Threshold (px) | 30 | 候補にする画面上の距離 |
-| Max Vertex Budget | 50,000 | スナップ先として登録する頂点数の上限（[超えたとき](docs/details.md#頂点数の上限)） |
-| Guide Color / Hard Snap Color | マゼンタ / シアン | ガイド線と表示の色（Hard Snap 中は後者） |
-
-同じ画面の Add Default Hotkeys と Clear Hotkeys で、`Shift+G` の割り当てを戻したり外したりできます。
-
-## 詳しい情報
-
-- [動作の詳細と困ったとき](docs/details.md)
+- [操作ガイド](docs/details.md)（[English](docs/details.en.md)）
 - [変更履歴](CHANGELOG.md)
-- [開発者向け資料（英語）](docs/DEVELOPMENT.md)
-- 質問は [Discussions](https://github.com/marc2825/Blender_SmartClip/discussions)、不具合の報告は [Issues](https://github.com/marc2825/Blender_SmartClip/issues) へ（[SUPPORT.md](SUPPORT.md)）
+- [開発者向け資料](docs/DEVELOPMENT.md)（英語）
+- [サポート](SUPPORT.md)：質問は [Discussions](https://github.com/marc2825/Blender_SmartClip/discussions)、不具合は [Issues](https://github.com/marc2825/Blender_SmartClip/issues) へ
+
+## 開発
+
+Blender に同梱されたモジュールだけを使っています。テスト、CI、リリース手順は[開発者向け資料](docs/DEVELOPMENT.md)にあります。
+
+```bash
+blender --background --factory-startup --python tests/headless_test_runner.py  # テスト
+python scripts/package_addon.py                                               # ZIP の作成
+```
+
+[Claude Code](https://claude.com/product/claude-code)（Anthropic）と [Codex](https://openai.com/codex)（OpenAI）を使って開発しました。
 
 ## ライセンス
 
-[MIT License](LICENSE)
-
-## 開発について
-
-このアドオンは [Claude Code](https://claude.com/product/claude-code)（Anthropic）と [Codex](https://openai.com/codex)（OpenAI）を使って開発しました。
+[MIT License](LICENSE)。Copyright (c) 2026 marc2825

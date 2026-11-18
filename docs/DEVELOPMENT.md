@@ -66,11 +66,12 @@ Dependabot proposes GitHub Actions updates monthly.
 
 - the newest released entry in `CHANGELOG.md`
 - `version` and `date-released` in `CITATION.cff`
-- the title line of `README.md`
+
+The README shows the version through the release badge, so it needs no update.
 
 ## Releasing
 
-1. Bump `bl_info["version"]`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff` and the README title. Run `python scripts/versioning.py`.
+1. Bump `bl_info["version"]`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff`. Run `python scripts/versioning.py`.
 2. Merge to `main` with CI passing.
 3. Optionally preview the package: `gh workflow run release-addon.yml -f version=X.Y.Z` builds the ZIP, checksum, and release notes as a workflow artifact without publishing anything.
 4. Tag the release commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
