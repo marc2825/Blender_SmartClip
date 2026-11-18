@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import FloatVectorProperty, IntProperty
+from bpy.props import BoolProperty, FloatVectorProperty, IntProperty
 from bpy.types import AddonPreferences
 
 from .utils import DEFAULT_SNAP_DISTANCE_PX, DEFAULT_VERTEX_BUDGET
@@ -28,12 +28,18 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
     max_vertex_budget: IntProperty(
         name="Max Vertex Budget",
         description=(
-            "Vertex count limit for the snap tree (nearest objects first). The object "
-            "crossing the limit is down-sampled; objects beyond it use bounding-box corners"
+            "Maximum number of snap points (nearest objects first). The object crossing "
+            "the limit is down-sampled; objects beyond it use bounding-box corners"
         ),
         default=DEFAULT_VERTEX_BUDGET,
         min=100,
         max=10_000_000,
+    )
+
+    hotkeys_enabled: BoolProperty(
+        name="Hotkeys Enabled",
+        description="Whether the Shift+G assignment is active (set by Add Default / Clear Hotkeys)",
+        default=True,
     )
 
     color_guide: FloatVectorProperty(
@@ -69,7 +75,8 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
         row = box.row(align=True)
         row.operator("smartclip.add_default_hotkeys", icon="ADD")
         row.operator("smartclip.clear_hotkeys", icon="TRASH")
-        box.label(text="Default: Shift+G (Object Mode / Mesh Edit Mode)")
+        state = "active" if self.hotkeys_enabled else "cleared"
+        box.label(text=f"Shift+G (Object Mode / Mesh Edit Mode): {state}")
 
         layout.separator()
         box = layout.box()

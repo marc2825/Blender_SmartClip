@@ -77,10 +77,34 @@ class SMARTCLIP_PT_panel(bpy.types.Panel):
 # Keymap management
 # ======================================================================
 # The addon's Shift+G items are added at the head of their keymaps, so they
-# take precedence over the built-in Shift+G (Select Grouped / Select Similar)
-# while active and leave it untouched otherwise.
+# take precedence over the built-in Shift+G (Select Grouped / Select Similar).
+# Whether they are active is the user's choice (Add Default / Clear Hotkeys,
+# stored in the add-on preferences) and does not follow the per-scene
+# "Enable Smart Clipping" setting: the keymap is shared by all scenes, so the
+# operator's poll() checks the scene instead.  When it fails, the key press
+# falls through to Blender's own Shift+G.
 
 _addon_keymaps: list = []    # [(km, kmi), ...]
+_hotkeys_fallback = {"enabled": True}  # used when preferences are unavailable
+
+
+def _hotkeys_wanted() -> bool:
+    prefs = get_addon_prefs(bpy.context)
+    if prefs is not None:
+        return bool(prefs.hotkeys_enabled)
+    return _hotkeys_fallback["enabled"]
+
+
+def _set_hotkeys_wanted(enabled: bool):
+    _hotkeys_fallback["enabled"] = enabled
+    prefs = get_addon_prefs(bpy.context)
+    if prefs is not None:
+        prefs.hotkeys_enabled = enabled
+    for _km, kmi in _addon_keymaps:
+        try:
+            kmi.active = enabled
+        except (ReferenceError, RuntimeError):
+            pass
 
 
 def _register_keymaps():
@@ -103,9 +127,8 @@ def _register_keymaps():
             shift=True,
             head=True,
         )
+        kmi.active = _hotkeys_wanted()
         _addon_keymaps.append((km, kmi))
-
-    _sync_keymap_state()
 
 
 def _unregister_keymaps():
@@ -115,22 +138,6 @@ def _unregister_keymaps():
         except (ReferenceError, RuntimeError):
             pass
     _addon_keymaps.clear()
-
-
-def _sync_keymap_state():
-    """Activate the addon hotkeys only while Smart Clipping is enabled."""
-    scene = getattr(bpy.context, "scene", None)
-    enabled = getattr(scene, "smartclip_enabled", True) if scene else True
-    for _km, kmi in _addon_keymaps:
-        try:
-            kmi.active = enabled
-        except (ReferenceError, RuntimeError):
-            pass
-
-
-def _on_enabled_update(self, _context):
-    """Called when smartclip_enabled changes."""
-    _sync_keymap_state()
 
 
 # ======================================================================
@@ -181,13 +188,11 @@ def migrate_legacy_scene_properties():
 @persistent
 def _on_load_post(_dummy):
     migrate_legacy_scene_properties()
-    _sync_keymap_state()
 
 
 def _deferred_init():
     # bpy.data is not accessible while add-ons register at startup.
     migrate_legacy_scene_properties()
-    _sync_keymap_state()
     return None
 
 
@@ -209,18 +214,17 @@ class SMARTCLIP_OT_add_default_hotkeys(bpy.types.Operator):
             kmi.shift = True
             kmi.ctrl = False
             kmi.alt = False
-        _sync_keymap_state()
+        _set_hotkeys_wanted(True)
         return {"FINISHED"}
 
 
 class SMARTCLIP_OT_clear_hotkeys(bpy.types.Operator):
     bl_idname = "smartclip.clear_hotkeys"
     bl_label = "Clear Hotkeys"
-    bl_description = "Deactivate Smart Clipping hotkeys"
+    bl_description = "Deactivate the Smart Clipping hotkeys until Add Default Hotkeys is used"
 
     def execute(self, _context):
-        for _km, kmi in _addon_keymaps:
-            kmi.active = False
+        _set_hotkeys_wanted(False)
         return {"FINISHED"}
 
 
@@ -253,8 +257,8 @@ def register():
 
     bpy.types.Scene.smartclip_enabled = BoolProperty(
         name="Enable Smart Clipping",
+        description="Use Smart Clipping in this scene; when off, Shift+G does Blender's default",
         default=True,
-        update=_on_enabled_update,
     )
     bpy.types.Scene.smartclip_target_scope = EnumProperty(
         name="Target Scope",
