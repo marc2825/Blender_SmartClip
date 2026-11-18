@@ -291,11 +291,13 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             self._build = detector.build_spatial_tree(
                 context, active_obj=self._active_obj,
                 moving_verts={m.obj: set(m.init_cos) for m in self._movers},
+                view=(self._region, self._rv3d),
             )
         else:
             self._build = detector.build_spatial_tree(
                 context, active_obj=self._active_obj,
                 exclude_objects=[m.obj for m in self._movers],
+                view=(self._region, self._rv3d),
             )
         scene.smartclip_runtime_info = _runtime_info(self._build)
 
@@ -595,10 +597,13 @@ def _runtime_info(build) -> str:
         return ""
     if not build.limit_exceeded:
         return f"Vertices in tree: {build.source_vertex_count}"
-    return (
-        f"Budget exceeded: {build.source_vertex_count} verts "
-        f"(sampled: {len(build.partial_objects)}, box only: {len(build.bounds_objects)})"
+    info = (
+        f"Budget exceeded: {build.point_count} points "
+        f"(sampled: {len(build.partial_objects)}, box only: {len(build.bounds_objects)}"
     )
+    if build.skipped_objects:
+        info += f", skipped: {len(build.skipped_objects)}"
+    return info + ")"
 
 
 def _resolve_region(context):
