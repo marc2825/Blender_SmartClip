@@ -75,6 +75,7 @@ def main() -> int:
             info = zipfile.ZipInfo(file_path.relative_to(root).as_posix(),
                                    date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3          # Unix, whatever OS builds the ZIP
             info.external_attr = 0o644 << 16
             zf.writestr(info, file_path.read_bytes())
 
