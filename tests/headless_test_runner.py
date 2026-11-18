@@ -151,11 +151,11 @@ def case_scope_self():
                                                 moving_verts={a: {0, 1}})
 
     assert obj_mode.point_count == 0
-    assert obj_mode.tree is None
 
-    assert edit_mode.point_count == len(a.data.vertices)
+    assert edit_mode.point_count == len(a.data.vertices) - 2
     assert all(meta.obj_name == "Self_A" for meta in edit_mode.point_meta)
-    assert edit_mode.exclude_indices == {0, 1}
+    moving_world = [a.matrix_world @ a.data.vertices[i].co for i in (0, 1)]
+    assert all((co - m).length > 1e-6 for co in edit_mode.points for m in moving_world)
     assert not edit_mode.limit_exceeded
 
 
@@ -203,26 +203,30 @@ def case_scope_visible_distance_sort():
 def case_budget_fallback_with_cubes():
     _clear_scene()
     active = _add_cube("Budget_Active", (0.0, 0.0, 0.0))
-    _add_cube("Budget_B", (3.0, 0.0, 0.0))
-    _add_cube("Budget_C", (6.0, 0.0, 0.0))
+    _add_cube("Budget_B", (3.0, 0.0, 0.0))                                  # 8 verts
+    for i, name in enumerate(("Budget_C", "Budget_D", "Budget_E", "Budget_F")):
+        _create_grid_object(name, (10.0 + 12.0 * i, 0.0, 0.0), 20, 20)     # 400 verts
     _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
 
-    scene = bpy.context.scene
-    scene.smartclip_target_scope = "VISIBLE"
-
-    # Cube has 8 vertices; budget 8 fits exactly the nearest target (B),
-    # leaving nothing for C, which falls back to BOUNDS only.
-    with _temporary_budget(8):
+    # Budget 200 = B (8) + C: 9 stand-ins + 163 sampled vertices, keeping
+    # 20 (3 later objects x 9, capped at a tenth of the budget) for D and E,
+    # which get only their stand-ins.  2 points remain, so F is skipped.
+    with _temporary_budget(200):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
 
     assert result.limit_exceeded
-    assert result.bounds_objects == ["Budget_C"]
-    assert result.partial_objects == []
-    assert result.source_vertex_count == 8
+    assert result.partial_objects == ["Budget_C"]
+    assert result.bounds_objects == ["Budget_D", "Budget_E"]
+    assert result.skipped_objects == ["Budget_F"]
+    assert result.point_count == 8 + 9 + 163 + 9 + 9
+    assert result.source_vertex_count == 8 + 163
 
     per_obj_types = {}
     for m in result.point_meta:
         per_obj_types.setdefault(m.obj_name, set()).add(m.point_type)
+    assert per_obj_types["Budget_B"] == {"POINT"}
+    assert per_obj_types["Budget_C"] == {"POINT", "BOUNDS"}
     for obj_name in result.bounds_objects:
         assert per_obj_types[obj_name] == {"BOUNDS"}
 
@@ -294,15 +298,18 @@ def case_budget_partial_fill():
     with _temporary_budget(108):
         result = detector.build_spatial_tree(bpy.context, active_obj=active)
 
-    # Cube fits (8); the grid crossing the limit is sampled into the remaining
-    # 100 slots instead of collapsing to its box; the far cube gets bounds only.
+    # Cube fits (8); the grid crossing the limit gets its 9 stand-ins and a
+    # sample of the remaining slots, minus 9 kept for the far cube, which
+    # then fits with its own 8 vertices (cheaper than stand-ins).
     assert result.limit_exceeded
     assert result.partial_objects == ["Part_Grid"]
-    assert result.bounds_objects == ["Part_Far"]
-    assert result.source_vertex_count <= 108
+    assert result.bounds_objects == []
+    assert result.point_count <= 108
     grid_points = [m for m in result.point_meta
                    if m.obj_name == "Part_Grid" and m.point_type == "POINT"]
-    assert 50 <= len(grid_points) <= 100, len(grid_points)
+    assert len(grid_points) == 108 - 8 - 9 - 9, len(grid_points)
+    far = [m for m in result.point_meta if m.obj_name == "Part_Far"]
+    assert len(far) == 8 and all(m.point_type == "POINT" for m in far)
 
 
 def case_scope_collection_recursive():
@@ -351,10 +358,14 @@ def case_edit_mode_sync():
     finally:
         bpy.ops.object.mode_set(mode="OBJECT")
 
-    assert result.point_count == 9
-    (excluded,) = result.exclude_indices
-    expected = obj.matrix_world @ Vector((5.0, 0.0, 0.0))
-    assert (result.points[excluded] - expected).length < 1e-5
+    # The flushed mesh has 9 vertices; the new (moving) one is left out and
+    # the 8 others are its correct, current positions.
+    assert result.point_count == 8, result.point_count
+    moving = obj.matrix_world @ Vector((5.0, 0.0, 0.0))
+    assert all((co - moving).length > 1e-5 for co in result.points)
+    corners = {tuple(round(v, 4) for v in obj.matrix_world @ Vector(c))
+               for c in ((sx, sy, sz) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1))}
+    assert {tuple(round(v, 4) for v in co) for co in result.points} == corners
 
 
 def case_parent_space_delta():
@@ -418,7 +429,46 @@ def _top_view():
     return region, rv3d
 
 
+def _top_view_scaled(scale):
+    """Top ortho view showing 50 px per (scale) world units."""
+    region = SimpleNamespace(width=1000, height=1000)
+    rv3d = SimpleNamespace(
+        perspective_matrix=Matrix.Diagonal((0.1 / scale, 0.1 / scale, -0.01 / scale, 1.0)),
+        view_matrix=Matrix.Identity(4),
+        is_perspective=False,
+        view_perspective="ORTHO",
+    )
+    return region, rv3d
+
+
+def _perspective_view(eye, target, fov_deg=50.0, size=(1600, 900)):
+    import math
+    width, height = size
+    near, far = 0.1, 1000.0
+    f = 1.0 / math.tan(math.radians(fov_deg) / 2.0)
+    proj = Matrix((
+        (f * height / width, 0.0, 0.0, 0.0),
+        (0.0, f, 0.0, 0.0),
+        (0.0, 0.0, (far + near) / (near - far), 2.0 * far * near / (near - far)),
+        (0.0, 0.0, -1.0, 0.0),
+    ))
+    eye, target = Vector(eye), Vector(target)
+    fwd = (target - eye).normalized()
+    right = fwd.cross(Vector((0.0, 0.0, 1.0))).normalized()
+    up = right.cross(fwd)
+    rot = Matrix((right, up, -fwd))
+    view = rot.to_4x4()
+    view.translation = -(rot @ eye)
+    region = SimpleNamespace(width=width, height=height)
+    rv3d = SimpleNamespace(perspective_matrix=proj @ view, view_matrix=view,
+                           is_perspective=True, view_perspective="PERSP",
+                           view_distance=(target - eye).length)
+    return region, rv3d
+
+
 def _build_from_points(coords, names=None, exclude=()):
+    if hasattr(detector, "build_from_points"):
+        return detector.build_from_points(coords, names=names, exclude=exclude)
     points = [Vector(c) for c in coords]
     names = names or [f"P{i}" for i in range(len(points))]
     tree = detector.kdtree.KDTree(len(points))
@@ -496,7 +546,7 @@ def case_find_candidates_hit_cap_skips_excluded():
 
     cands = detector.find_candidates(
         build, current, region, rv3d, mouse,
-        snap_distance_px=30, query_radius=10.0, max_hits=8,
+        snap_distance_px=30, query_radius=10.0, max_results=8,
     )
     assert len(cands) == 1  # (0,4,0) is 200 px away
     assert (cands[0].location - Vector((0.3, 0.0, 0.0))).length < 1e-6
@@ -710,6 +760,275 @@ def case_pixel_world_size():
     assert abs(size - 0.02) < 1e-5, size
 
 
+# --- Keymap / scene enable (issue 3) -------------------------------------
+
+def _addon_kmis():
+    return [kmi for _km, kmi in smart_clipping._addon_keymaps]
+
+
+def case_keymap_independent_of_scene_enable():
+    scene = bpy.context.scene
+    kmis = _addon_kmis()
+    assert kmis, "addon keymap items were not registered"
+    bpy.ops.smartclip.add_default_hotkeys()
+    try:
+        scene.smartclip_enabled = False
+        # Disabling Smart Clipping in one scene must not switch the shared
+        # keymap off (another scene may have it enabled); poll() blocks the
+        # operator instead so Shift+G falls through to Blender's own item.
+        assert all(kmi.active for kmi in kmis)
+        assert not smart_clipping.SMARTCLIP_OT_modal_move.poll(bpy.context)
+        scene.smartclip_enabled = True
+        assert smart_clipping.SMARTCLIP_OT_modal_move.poll(bpy.context)
+    finally:
+        scene.smartclip_enabled = True
+
+
+def case_clear_hotkeys_stays_cleared():
+    scene = bpy.context.scene
+    kmis = _addon_kmis()
+    try:
+        bpy.ops.smartclip.clear_hotkeys()
+        assert not any(kmi.active for kmi in kmis)
+        # Toggling the scene setting or loading a file must not bring a
+        # removed assignment back.
+        scene.smartclip_enabled = False
+        scene.smartclip_enabled = True
+        for handler in list(bpy.app.handlers.load_post):
+            if getattr(handler, "__module__", "").startswith("smart_clipping"):
+                handler(None)
+        assert not any(kmi.active for kmi in kmis), [kmi.active for kmi in kmis]
+        bpy.ops.smartclip.add_default_hotkeys()
+        assert all(kmi.active for kmi in kmis)
+    finally:
+        bpy.ops.smartclip.add_default_hotkeys()
+        scene.smartclip_enabled = True
+
+
+# --- Vertex budget (issues 1.1 / 1.3) ------------------------------------
+
+def _usable_points(result):
+    exclude = result.exclude_indices
+    return [(co, m) for i, (co, m) in enumerate(zip(result.points, result.point_meta))
+            if i not in exclude]
+
+
+def case_moving_vertices_do_not_use_budget():
+    _clear_scene()
+    obj = _create_grid_object("MB_Grid", (0.0, 0.0, 0.0), 20, 20)   # 400 verts
+    _select_only(obj)
+    bpy.context.scene.smartclip_target_scope = "SELF"
+    moving = set(range(300))
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        with _temporary_budget(150):
+            result = detector.build_spatial_tree(bpy.context, active_obj=obj,
+                                                 moving_verts={obj: moving})
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    usable = [m for _co, m in _usable_points(result) if m.point_type == "POINT"]
+    # The 100 vertices that stay put fit in the budget of 150; the moving
+    # ones are never candidates, so they must not take budget or be sampled.
+    assert len(usable) == 100, len(usable)
+    assert not result.limit_exceeded
+    moving_world = {tuple(round(v, 5) for v in obj.matrix_world @ obj.data.vertices[i].co)
+                    for i in moving}
+    assert not any(tuple(round(v, 5) for v in co) in moving_world
+                   for co, _m in _usable_points(result))
+
+
+def case_shared_mesh_moving_vertices_excluded():
+    _clear_scene()
+    a = _add_cube("SM_A", (0.0, 0.0, 0.0))
+    b = a.copy()                       # linked duplicate: same mesh datablock
+    b.name = "SM_B"
+    b.location = (5.0, 0.0, 0.0)
+    bpy.context.scene.collection.objects.link(b)
+    bpy.context.view_layer.update()
+    _select_only(a)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        with _temporary_budget(100000):
+            result = detector.build_spatial_tree(bpy.context, active_obj=a,
+                                                 moving_verts={a: {0}})
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    # Vertex 0 moves in the shared mesh, so it moves on SM_B as well and its
+    # start position on SM_B is not a valid target.
+    b_v0 = b.matrix_world @ b.data.vertices[0].co
+    a_v0 = a.matrix_world @ a.data.vertices[0].co
+    usable = [co for co, _m in _usable_points(result)]
+    assert all((co - b_v0).length > 1e-5 for co in usable)
+    assert all((co - a_v0).length > 1e-5 for co in usable)
+    assert len(usable) == 14, len(usable)  # 7 + 7 remaining vertices
+
+
+def case_budget_caps_total_points():
+    _clear_scene()
+    active = _add_cube("BC_Active", (-3.0, 0.0, 0.0))
+    for i in range(150):
+        _add_cube(f"BC_{i:03d}", (3.0 * i, 0.0, 0.0))
+    _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+    with _temporary_budget(100):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+    # Bounding-box stand-ins count against the budget too, so the number of
+    # snap points stays bounded however many objects are in scope.
+    assert result.point_count <= 100, result.point_count
+    assert result.limit_exceeded
+
+
+def case_budget_sampling_covers_mesh():
+    _clear_scene()
+    active = _add_cube("SC_Active", (0.0, 0.0, 20.0))
+    grid = _create_grid_object("SC_Grid", (0.0, 0.0, 0.0), 320, 320)   # 102,400 verts
+    _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+    # 102,400 / 320 = 320: a stride sample would take every 320th vertex,
+    # i.e. one column of the 320-wide grid.
+    with _temporary_budget(320):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+    pts = [co for co, m in zip(result.points, result.point_meta)
+           if m.obj_name == "SC_Grid" and m.point_type == "POINT"]
+    assert len(pts) > 100, len(pts)
+    xs = [co.x for co in pts]
+    ys = [co.y for co in pts]
+    # A stride equal to the grid row length used to pick a single column.
+    assert max(xs) - min(xs) > 8.0 and max(ys) - min(ys) > 8.0, (min(xs), max(xs))
+
+
+# --- Candidate ranking and recall (issues 1.2 / 1.4 / 1.5) ---------------
+
+def case_ranking_independent_of_scene_scale():
+    winners = []
+    for scale in (0.001, 1.0, 1000.0):
+        region, rv3d = _top_view_scaled(scale)
+        current = Vector((0.0, 0.0, 0.0))
+        mouse = utils.world_to_screen(region, rv3d, current)
+        build = _build_from_points([
+            (0.12 * scale, 0.0, -3.0 * scale),   # 6 px away on screen, deep
+            (0.40 * scale, 0.0, 0.0),            # 20 px away, close in 3D
+        ], names=["Near_On_Screen", "Near_In_3D"])
+        cands = detector.find_candidates(build, current, region, rv3d, mouse,
+                                         snap_distance_px=30, query_radius=1e9)
+        winners.append(cands[0].target_name)
+    # The candidate closest on screen wins at every scene scale.
+    assert winners == ["Near_On_Screen"] * 3, winners
+
+
+def case_ranking_ties_prefer_nearest_in_3d():
+    region, rv3d = _top_view()
+    current = Vector((0.0, 0.0, 0.0))
+    mouse = utils.world_to_screen(region, rv3d, current)
+    build = _build_from_points([(0.2, 0.0, -5.0), (0.2, 0.01, 1.0)],
+                               names=["Behind", "Front"])
+    cands = detector.find_candidates(build, current, region, rv3d, mouse,
+                                     snap_distance_px=30, query_radius=1e9)
+    assert cands[0].target_name == "Front", [c.target_name for c in cands]
+
+
+def case_find_recall_with_crowded_neighbours():
+    import math
+    region, rv3d = _top_view()
+    current = Vector((0.0, 0.0, 0.0))
+    mouse = utils.world_to_screen(region, rv3d, current)
+    # 2,000 points close in 3D but more than 30 px away on screen ...
+    ring = [(1.1 * math.cos(t), 1.1 * math.sin(t), 0.0)
+            for t in (2 * math.pi * k / 2000 for k in range(2000))]
+    # ... and one point 20 px away on screen but farther in 3D.
+    build = _build_from_points(ring + [(0.4, 0.0, 5.0)])
+    cands = detector.find_candidates(build, current, region, rv3d, mouse,
+                                     snap_distance_px=30, query_radius=10.0)
+    assert cands, "the only on-screen candidate was not examined"
+    assert (cands[0].location - Vector((0.4, 0.0, 5.0))).length < 1e-5
+
+
+def _brute_force_best(coords, region, rv3d, current, mouse, thr, radius, exclude=()):
+    best = None
+    for i, c in enumerate(coords):
+        if i in exclude:
+            continue
+        s = utils.world_to_screen(region, rv3d, Vector(c))
+        if s is None:
+            continue
+        d = (s - mouse).length
+        w = (Vector(c) - current).length
+        if d <= thr and w <= radius:
+            key = (int(d // 2.0), w)
+            if best is None or key < best[0]:
+                best = (key, i)
+    return None if best is None else best[1]
+
+
+def case_find_matches_brute_force_perspective():
+    import random
+    rnd = random.Random(7)
+    region, rv3d = _perspective_view((5.0, -15.0, 8.0), (5.0, 5.0, 5.0))
+    coords = [(rnd.uniform(0, 10), rnd.uniform(0, 10), rnd.uniform(0, 10)) for _ in range(3000)]
+    build = _build_from_points(coords)
+    checked = 0
+    for k in range(60):
+        current = Vector(coords[rnd.randrange(len(coords))]) + Vector(
+            (rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3)))
+        mouse = utils.world_to_screen(region, rv3d, current)
+        expected = _brute_force_best(coords, region, rv3d, current, mouse, 30, 6.0)
+        cands = detector.find_candidates(build, current, region, rv3d, mouse,
+                                         snap_distance_px=30, query_radius=6.0)
+        if expected is None:
+            assert not cands
+            continue
+        checked += 1
+        assert cands and (cands[0].location - Vector(coords[expected])).length < 1e-5, k
+    assert checked > 30, checked
+
+
+def case_axis_align_skips_excluded_run():
+    region, rv3d = _top_view()
+    current = Vector((0.0, 0.0, 0.0))
+    mouse = utils.world_to_screen(region, rv3d, current)
+    # 30,000 excluded points share the nearest x value; the scan must not
+    # give up before reaching the valid one behind them.
+    coords = [(0.05, 1.0 + i * 1e-4, 0.0) for i in range(30000)] + [(0.1, 3.0, 0.0)]
+    build = _build_from_points(coords, exclude=range(30000))
+    cands = detector.find_axis_candidates(build, current, region, rv3d, mouse,
+                                          snap_distance_px=30, axis_flags={"X"})
+    assert cands and abs(cands[0].location.x - 0.1) < 1e-6, [c.location.x for c in cands]
+
+
+def case_axis_align_matches_brute_force_perspective():
+    import random
+    rnd = random.Random(11)
+    region, rv3d = _perspective_view((-6.0, -14.0, 9.0), (4.0, 4.0, 3.0))
+    coords = [(rnd.uniform(0, 8), rnd.uniform(0, 8), rnd.uniform(0, 6)) for _ in range(1500)]
+    build = _build_from_points(coords)
+    checked = 0
+    for k in range(40):
+        current = Vector((rnd.uniform(0, 8), rnd.uniform(0, 8), rnd.uniform(0, 6)))
+        mouse = utils.world_to_screen(region, rv3d, current)
+        for axis, idx in (("X", 0), ("Y", 1), ("Z", 2)):
+            best = None
+            for c in coords:
+                align = current.copy()
+                align[idx] = c[idx]
+                s = utils.world_to_screen(region, rv3d, align)
+                if s is None:
+                    continue
+                d = (s - mouse).length
+                if d <= 30:
+                    key = (int(d // 2.0), abs(c[idx] - current[idx]))
+                    if best is None or key < best[0]:
+                        best = (key, c[idx])
+            cands = detector.find_axis_candidates(build, current, region, rv3d, mouse,
+                                                  snap_distance_px=30, axis_flags={axis})
+            if best is None:
+                assert not cands
+                continue
+            checked += 1
+            assert cands and abs(cands[0].location[idx] - best[1]) < 1e-6, (k, axis)
+    assert checked > 60, checked
+
+
 CASES = {
     "scene_props": case_scene_properties_registered,
     "scope_self": case_scope_self,
@@ -733,6 +1052,18 @@ CASES = {
     "execute_edit_multi_object": case_execute_edit_mode_multi_object,
     "legacy_prop_migration": case_legacy_scene_property_migration,
     "pixel_world_size": case_pixel_world_size,
+    "keymap_independent_of_scene": case_keymap_independent_of_scene_enable,
+    "clear_hotkeys_stays_cleared": case_clear_hotkeys_stays_cleared,
+    "moving_verts_no_budget": case_moving_vertices_do_not_use_budget,
+    "shared_mesh_moving_excluded": case_shared_mesh_moving_vertices_excluded,
+    "budget_caps_total_points": case_budget_caps_total_points,
+    "budget_sampling_covers_mesh": case_budget_sampling_covers_mesh,
+    "ranking_scale_independent": case_ranking_independent_of_scene_scale,
+    "ranking_ties_nearest_3d": case_ranking_ties_prefer_nearest_in_3d,
+    "find_recall_crowded": case_find_recall_with_crowded_neighbours,
+    "find_brute_force_persp": case_find_matches_brute_force_perspective,
+    "axis_skips_excluded_run": case_axis_align_skips_excluded_run,
+    "axis_brute_force_persp": case_axis_align_matches_brute_force_perspective,
 }
 
 

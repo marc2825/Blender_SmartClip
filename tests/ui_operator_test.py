@@ -31,6 +31,18 @@ import smart_clipping  # noqa: E402
 STEP = 0.15  # seconds between simulated events
 
 _results = []
+_TEE = None
+
+
+class SMARTCLIP_TEST_OT_probe(bpy.types.Operator):
+    """Records that a key press reached the keymap item after Smart Clipping's."""
+    bl_idname = "smartclip_test.probe"
+    bl_label = "Smart Clipping Test Probe"
+    calls = 0
+
+    def invoke(self, _context, _event):
+        SMARTCLIP_TEST_OT_probe.calls += 1
+        return {"FINISHED"}
 
 
 class _StderrTee(io.TextIOBase):
@@ -101,6 +113,9 @@ def _steps():
     scene.smartclip_target_scope = "SELF"  # Object Mode + SELF = no snap targets
 
     _parent, child, target = _setup_scene()
+    bpy.context.view_layer.update()
+    with bpy.context.temp_override(window=win, area=area):
+        bpy.ops.ed.undo_push(message="Smart Clipping UI test scene")
     rv3d.view_perspective = "PERSP"
     rv3d.view_location = (0.5, 0.0, 0.0)
     rv3d.view_distance = 12.0
@@ -200,8 +215,81 @@ def _steps():
           last is not None and last.bl_idname == "VIEW3D_OT_smartclip_move"
           and (Vector(last.properties.offset) - delta).length < 1e-4,
           f"{last.bl_idname if last else None}")
+
+    # Editing Offset in Adjust Last Operation redoes the move with the new
+    # value (what the panel does: undo, then execute with the new property;
+    # undo reloads the data, so object references are fetched again)
+    new_offset = Vector((0.3, -0.2, 0.15))
+    last.properties.offset = new_offset
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.ed.undo_redo()
+    yield STEP
+    child = bpy.data.objects["UI_Child"]
+    target = bpy.data.objects["UI_Target"]
+    scene = bpy.context.scene
+    moved = world() - start_world
+    check("redo_applies_edited_offset", (moved - new_offset).length < 1e-4,
+          f"moved {tuple(round(v, 4) for v in moved)}")
     child.location = start_loc
     bpy.context.view_layer.update()
+    yield STEP
+
+    # An internal error mid-move restores the selection and cleans up
+    mark = len(_TEE.captured)
+    original_find = smart_clipping.detector.find_candidates
+
+    def failing_find(*_args, **_kwargs):
+        raise RuntimeError("injected failure")
+
+    smart_clipping.detector.find_candidates = failing_find
+    try:
+        yield from start_modal("error")
+        ev("MOUSEMOVE", "NOTHING", dx=40, dy=10)
+        yield STEP
+    finally:
+        smart_clipping.detector.find_candidates = original_find
+    injected = "".join(_TEE.captured[mark:])
+    del _TEE.captured[mark:]
+    check("error_reported", "injected failure" in injected)
+    check("error_restores_position", (world() - start_world).length < 1e-6)
+    check("error_removes_draw_handlers", not smart_clipping.ops._live_draw_handles,
+          str(len(smart_clipping.ops._live_draw_handles)))
+    # The error report pops up under the cursor and takes the next key press
+    ev("MOUSEMOVE", "NOTHING", dx=200, dy=150)
+    ev("ESC", "PRESS")
+    ev("ESC", "RELEASE")
+    ev("MOUSEMOVE", "NOTHING")
+    yield STEP
+    yield from start_modal("after_error")      # the operator still works
+    ev("ESC", "PRESS")
+    yield STEP
+
+    # Scene setting off: the shared keymap item stays, poll() refuses, and the
+    # key press continues to the next keymap item.  The probe item registered
+    # in main() sits right after ours, in front of Blender's own Shift+G.
+    order = [k.idname for k in bpy.context.window_manager.keyconfigs.user
+             .keymaps["Object Mode"].keymap_items if k.type == "G" and k.shift and not k.ctrl]
+    check("probe_follows_smart_clipping",
+          order[:2] == ["view3d.smartclip_move", "smartclip_test.probe"], str(order))
+    try:
+        SMARTCLIP_TEST_OT_probe.calls = 0
+        yield from start_modal("enabled_has_priority")
+        ev("ESC", "PRESS")
+        yield STEP
+        check("enabled_takes_precedence", SMARTCLIP_TEST_OT_probe.calls == 0)
+
+        scene.smartclip_enabled = False
+        scene.smartclip_runtime_info = ""
+        ev("G", "PRESS", shift=True)
+        ev("G", "RELEASE", shift=True)
+        yield STEP
+        check("disabled_does_not_start", scene.smartclip_runtime_info == "")
+        check("disabled_falls_through", SMARTCLIP_TEST_OT_probe.calls == 1,
+              str(SMARTCLIP_TEST_OT_probe.calls))
+        check("disabled_keeps_keymap_item",
+              all(kmi.active for _km, kmi in smart_clipping._addon_keymaps))
+    finally:
+        scene.smartclip_enabled = True
     yield STEP
 
     # 3b. Every selected object moves by the same world delta
@@ -218,6 +306,25 @@ def _steps():
     check("multi_select_moves_together",
           d_child.length > 0.01 and (d_child - d_target).length < 1e-4,
           f"child {tuple(round(v, 3) for v in d_child)} target {tuple(round(v, 3) for v in d_target)}")
+
+    # Undo puts every moved object back; redo moves them again
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.ed.undo()
+    yield STEP
+    child = bpy.data.objects["UI_Child"]
+    target = bpy.data.objects["UI_Target"]
+    scene = bpy.context.scene
+    check("undo_restores_all_moved",
+          (world() - start_world).length < 1e-4
+          and (target.matrix_world.translation - target_start).length < 1e-4)
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.ed.redo()
+    yield STEP
+    child = bpy.data.objects["UI_Child"]
+    target = bpy.data.objects["UI_Target"]
+    scene = bpy.context.scene
+    check("redo_moves_again", ((world() - start_world) - d_child).length < 1e-4
+          and ((target.matrix_world.translation - target_start) - d_target).length < 1e-4)
     child.location = start_loc
     target.matrix_world.translation = target_start
     target.select_set(False)
@@ -266,13 +373,65 @@ def _steps():
     with bpy.context.temp_override(window=win, area=area, region=region):
         bpy.ops.object.mode_set(mode="OBJECT")
     yield STEP
+    check("no_leftover_draw_handlers", not smart_clipping.ops._live_draw_handles)
+
+    # Loading a file mid-move cancels the operator and removes its handlers
+    yield from start_modal("file_load")
+    ev("MOUSEMOVE", "NOTHING", dx=30)
+    yield STEP
+    with bpy.context.temp_override(window=win):
+        bpy.ops.wm.read_homefile()
+    yield 0.5
+    check("file_load_removes_draw_handlers", not smart_clipping.ops._live_draw_handles,
+          str(len(smart_clipping.ops._live_draw_handles)))
+
+    # Disabling the add-on mid-move puts the selection back and cleans up
+    # (Blender drops the modal handler without calling cancel()).  The file
+    # load replaced the screen, so the window, area and region are fetched
+    # again (event_simulate on the old ones crashes Blender).
+    win, area, region, rv3d = _view3d()
+    cx = region.x + region.width // 2
+    cy = region.y + region.height // 2
+    for dx in (5, 0):
+        ev("MOUSEMOVE", "NOTHING", dx=dx)
+        yield STEP
+    cube = bpy.data.objects["Cube"]               # the startup file's cube
+    cube_start = cube.matrix_world.translation.copy()
+    scene = bpy.context.scene
+    yield from start_modal("unregister")
+    ev("MOUSEMOVE", "NOTHING", dx=90)
+    yield STEP
+    moved = (cube.matrix_world.translation - cube_start).length
+    smart_clipping.unregister()
+    yield STEP
+    check("unregister_restores_selection",
+          moved > 1e-3 and (cube.matrix_world.translation - cube_start).length < 1e-6,
+          f"moved {moved:.3f}")
+    check("unregister_removes_draw_handlers", not smart_clipping.ops._live_draw_handles)
+    # The dropped handler can linger as a None entry until the next event.
+    ev("MOUSEMOVE", "NOTHING", dx=20)
+    ev("LEFTMOUSE", "PRESS")
+    ev("LEFTMOUSE", "RELEASE")
+    yield STEP
+    leftover = [m for m in getattr(bpy.context.window, "modal_operators", [])
+                if m is None or m.bl_idname == "VIEW3D_OT_smartclip_move"]
+    check("unregister_ends_modal", not leftover, str(leftover))
+    check("unregister_leaves_selection_alone",
+          (cube.matrix_world.translation - cube_start).length < 1e-6)
 
 
 def main():
-    tee = _StderrTee(sys.stderr)
+    global _TEE
+    tee = _TEE = _StderrTee(sys.stderr)
     sys.stderr = tee
     if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
         smart_clipping.register()
+    bpy.utils.register_class(SMARTCLIP_TEST_OT_probe)
+    # Added in the same tick as the add-on's items so both are merged into the
+    # user keymap together; head=True places it right after Smart Clipping's.
+    km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(
+        name="Object Mode", space_type="EMPTY", region_type="WINDOW")
+    km.keymap_items.new("smartclip_test.probe", type="G", value="PRESS", shift=True, head=True)
 
     steps = _steps()
 
@@ -295,7 +454,8 @@ def main():
             finish(crashed=True)
         return None
 
-    bpy.app.timers.register(tick, first_interval=1.0)
+    # persistent: the last step loads a file, which drops ordinary timers
+    bpy.app.timers.register(tick, first_interval=1.0, persistent=True)
 
 
 if __name__ == "__main__":
