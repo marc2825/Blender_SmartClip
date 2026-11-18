@@ -54,7 +54,9 @@ Set in **Preferences → Add-ons → Smart Clipping**.
 | Max Vertex Budget | 50,000 | Maximum number of vertices registered as snap targets ([Vertex budget](#vertex-budget)) |
 | Guide Color / Hard Snap Color | Magenta / cyan | Colors of the guides and HUD (the second during hard snap) |
 
-**Add Default Hotkeys** and **Clear Hotkeys** on the same page restore or remove the `Shift+G` assignment.
+**Add Default Hotkeys** and **Clear Hotkeys** on the same page restore or remove the `Shift+G` assignment. A removed assignment is saved in the preferences and stays removed after restarting Blender.
+
+**Enable Smart Clipping** in the panel is a per-scene setting; in scenes where it is off, `Shift+G` does Blender's default. The assignment itself is shared by all scenes unless you remove it.
 
 ## How snap targets are built
 
@@ -71,23 +73,28 @@ Snap targets are built when a move starts and are not rebuilt during the move.
 What is being moved is never a snap target:
 
 - Object Mode: the moving objects and their children
-- Edit Mode: the moving vertices (other vertices of the same mesh remain targets if Target Scope includes that mesh)
+- Edit Mode: the moving vertices (other vertices of the same mesh remain targets if Target Scope includes that mesh), also on objects that share the mesh
+
+Moving vertices are not counted, so they do not use up the vertex budget.
 
 So Self Only gives no targets in Object Mode. With Selected, only the active object moves and the other selected objects are the targets.
 
 ### Vertex budget
 
-At most Max Vertex Budget vertices are registered, starting with the objects closest to what is being moved.
+Max Vertex Budget caps the total number of snap points. Objects in view come first, and among them the ones closest to what is being moved.
 
 1. Objects that fit in the budget register all their vertices.
-2. The object that crosses the limit is down-sampled to fit what is left.
-3. Objects farther away register only their bounding-box corners and origin.
+2. The object that crosses the limit registers its bounding-box corners and origin (9 points) plus a random sample of its vertices.
+3. Objects farther away register only their corners and origin; up to a tenth of the budget is kept for them.
+4. Objects after the budget is used up are left out.
 
-The Performance section of the panel shows the number of registered vertices and how many objects were down-sampled or reduced to their box.
+The Performance section of the panel shows the number of registered points and how many objects were down-sampled, reduced to their box, or left out.
 
 ## How candidates are chosen
 
-A vertex is a candidate when it lies within Snap Threshold of the moving point projected on screen. The mouse cursor position is not used.
+A vertex is a candidate when it lies within Snap Threshold of the moving point projected on screen. The mouse cursor position is not used. Every vertex that qualifies is checked, so crowded geometry does not hide candidates.
+
+Among several candidates, the one closest on screen wins; candidates overlapping within 2 pixels on screen are decided by which is closer to the moving point in 3D. The choice does not depend on the scene scale or zoom.
 
 The moving point is:
 

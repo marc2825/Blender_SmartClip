@@ -6,6 +6,21 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Fixed
+
+- Clear Hotkeys no longer comes back after toggling Enable Smart Clipping or opening a file, and is remembered across restarts. Enable Smart Clipping is now purely per scene: the shared `Shift+G` assignment stays, and in scenes where it is off the key does Blender's default.
+- Snap candidates are no longer missed in crowded scenes (the search looked at only 512 points chosen by 3D distance), and the choice no longer depends on the scene scale: the candidate closest on screen wins, with overlapping ones decided by 3D distance.
+- In Edit Mode, the vertices being moved no longer use up Max Vertex Budget, and they are also excluded on objects sharing the mesh.
+- Down-sampling an over-budget mesh no longer picks a single row or column of a grid.
+- Adjust Last Operation applied the offset in the wrong space for parented objects right after an undo.
+- Snap point markers were not drawn on Blender 4.0 (an error was printed on every redraw instead).
+- Disabling the add-on during a move left the selection half-moved; it is now put back.
+
+### Changed
+
+- Searching for candidates is much faster on large scenes (about 0.5 ms instead of 360 ms per mouse move with 100,000 points in our benchmark), and preparing a move is faster (a 1M-vertex mesh: 0.03 s instead of 1.6 s).
+- Max Vertex Budget now caps all snap points, including bounding-box stand-ins; objects in view are taken first, and objects beyond the budget are left out (shown in the panel).
+
 ## [1.2.1] - 2026-11-18
 
 ### Fixed

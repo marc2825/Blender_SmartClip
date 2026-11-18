@@ -37,7 +37,7 @@ The full list of controls, how to choose Target Scope, and the preferences are i
 ## Notes
 
 - Only mesh vertices are snap targets, taken from the geometry (with modifiers) at the moment the move starts.
-- Beyond **Max Vertex Budget** (default 50,000) vertices, distant objects are down-sampled or reduced to their bounding-box corners and origin.
+- Snap points are limited to **Max Vertex Budget** (default 50,000). Beyond it, distant objects are down-sampled or reduced to their bounding-box corners and origin, and the farthest are left out.
 - With **Enable Smart Clipping** off, `Shift+G` goes back to Blender's Select Grouped / Select Similar.
 
 ## Documentation

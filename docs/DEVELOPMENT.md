@@ -7,7 +7,7 @@ This guide is for working on the add-on itself. For installing and using it, see
 | Path | Contents |
 |---|---|
 | `smart_clipping/ops.py` | The modal move operator: what moves, input handling, snapping |
-| `smart_clipping/detector.py` | Building the snap tree and searching it |
+| `smart_clipping/detector.py` | Collecting snap points and searching them in screen space |
 | `smart_clipping/drawing.py` | Guide lines and HUD |
 | `smart_clipping/prefs.py`, `utils.py` | Preferences and shared helpers |
 | `smart_clipping/__init__.py` | `bl_info`, panel, keymaps, scene properties and their migration |
@@ -40,23 +40,46 @@ blender --factory-startup --enable-event-simulate --python tests/ui_operator_tes
 
 ### Manual
 
+`.github/workflows/ui-tests.yml` runs the same test on a virtual display. It is started by hand (Actions > UI Tests) until it has proven stable on GitHub-hosted runners.
+
 How snapping feels is still worth checking by hand after UI changes. `tests/manual_ui_setup.py` builds a scene with targets along each axis, a grid that exceeds the vertex budget, and a collection for Manual Collection scope, then prints what to try.
 
 ```sh
 blender --python tests/manual_ui_setup.py
 ```
 
+### Release ZIP
+
+`tests/install_zip_test.py` installs a packaged ZIP the way a user would and checks that it enables, registers, keeps a cleared hotkey off, and disables cleanly. It refuses to run unless the user folders point somewhere disposable:
+
+```sh
+python scripts/package_addon.py --output-dir /tmp/dist
+BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER_CONFIG=/tmp/bl/config \
+  blender --background --factory-startup --python tests/install_zip_test.py -- /tmp/dist/smart_clipping-vX.Y.Z.zip
+```
+
+### Benchmark
+
+`tests/benchmark_snap.py` measures build time, search time, memory, and recall against a brute-force ground truth on synthetic point clouds (1k to 1M points, uniform and crowded, different scene scales). It reports numbers and does not pass or fail. `--impl` points it at another copy of the package, for example a release exported with `git archive vX.Y.Z smart_clipping`, to compare.
+
+```sh
+blender --background --factory-startup --python tests/benchmark_snap.py -- --quick
+```
+
 ## CI
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, compile check, headless tests on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4 |
+| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, compile check, headless tests and a ZIP install test on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4 |
 | `codeql.yml` | Pushes, pull requests, monthly | CodeQL scan of the Python code |
-| `release-addon.yml` | `v*.*.*` tags, manual runs | Packages and publishes a release (see below) |
+| `release-addon.yml` | `v*.*.*` tags, manual runs | Packages, installs the ZIP into Blender 4.0.2, and publishes a release (see below) |
+| `ui-tests.yml` | Manual | UI test on a virtual display |
 
 Dependabot proposes GitHub Actions updates monthly.
 
-`blender-ci.yml` caches the Blender archive per version. On a cache miss it downloads from download.blender.org, falls back to mirrors, and checks the archive against the checksum published on blender.org.
+The workflows get Blender through `.github/scripts/fetch-blender.sh`: the archive and blender.org checksum are cached per version, a cache miss downloads from download.blender.org with mirrors as fallback, and the archive is checked against the checksum on every run. Workflows default to read-only tokens; only the release job can write. The third-party release action is pinned to a commit.
+
+`scripts/package_addon.py` writes files in a fixed order with fixed timestamps, so the same sources always produce the same ZIP and checksum.
 
 ## Versions
 
