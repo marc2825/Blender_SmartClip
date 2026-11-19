@@ -44,6 +44,11 @@ _NAVIGATION_EVENTS = {
     "MIDDLEMOUSE", "WHEELUPMOUSE", "WHEELDOWNMOUSE",
     "TRACKPADPAN", "TRACKPADZOOM", "MOUSEROTATE", "MOUSESMARTZOOM",
     "NDOF_MOTION",
+    # numpad views, zoom and View Selected / View All
+    "NUMPAD_0", "NUMPAD_1", "NUMPAD_2", "NUMPAD_3", "NUMPAD_4",
+    "NUMPAD_5", "NUMPAD_6", "NUMPAD_7", "NUMPAD_8", "NUMPAD_9",
+    "NUMPAD_PERIOD", "NUMPAD_PLUS", "NUMPAD_MINUS",
+    "HOME",
 }
 
 # Every draw handler currently installed by a running operator.  Kept at
@@ -204,8 +209,11 @@ def gather_movers(context):
 
     selected = list(context.selected_editable_objects)
     snaps_to_selection = getattr(context.scene, "smartclip_target_scope", None) == "SELECTED"
-    if active is not None and (snaps_to_selection or not selected):
+    active_editable = active is not None and active in list(context.editable_objects)
+    if active_editable and (snaps_to_selection or not selected):
         selected = [active]
+    elif snaps_to_selection:
+        selected = []
     moving_ptrs = {obj.as_pointer() for obj in selected}
     roots = [obj for obj in selected if not _has_moving_ancestor(obj, moving_ptrs)]
     movers = [_ObjectMover(obj) for obj in roots]
@@ -347,10 +355,13 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
         # Confirm
         if event.type in {"LEFTMOUSE", "RET", "NUMPAD_ENTER"} and event.value == "PRESS":
-            if self.applied_world is not None:
+            moved = (self.applied_world is not None
+                     and (self.applied_world - self._start_world).length > 0.0)
+            if moved:
                 self.offset = self.applied_world - self._start_world
             self._finish(context)
-            return {"FINISHED"}
+            # Nothing moved: no undo step and no redo panel entry
+            return {"FINISHED"} if moved else {"CANCELLED"}
 
         # Pass through viewport navigation (orbit / pan / zoom)
         if event.type in _NAVIGATION_EVENTS:

@@ -320,9 +320,10 @@ def build_spatial_tree(context, active_obj=None, moving_verts=None,
             mesh, owns_mesh = source.to_mesh(), True
         try:
             local = _local_coords(mesh)
+            keep = np.isfinite(local).all(axis=1)
             if moving:
-                keep = np.ones(len(local), dtype=bool)
                 keep[[i for i in moving if 0 <= i < len(local)]] = False
+            if not keep.all():
                 local = local[keep]
             count = len(local)
             obj_names.append(obj.name)
@@ -404,12 +405,17 @@ def _screen_index(build, region, rv3d, cell_px):
         return cached[1]
 
     coords = build.coords
-    w = coords @ pm[3, :3] + pm[3, 3]
-    front = np.flatnonzero(w > 0.0)          # same rule as location_3d_to_region_2d
-    hom = coords[front] @ pm[:2, :3].T + pm[:2, 3]
-    wf = w[front]
-    sx = region.width / 2.0 * (1.0 + hom[:, 0] / wf)
-    sy = region.height / 2.0 * (1.0 + hom[:, 1] / wf)
+    with np.errstate(invalid="ignore", over="ignore"):
+        w = coords @ pm[3, :3] + pm[3, 3]
+        # same rule as location_3d_to_region_2d; non-finite points never match
+        front = np.flatnonzero(np.isfinite(w) & (w > 0.0) & np.isfinite(coords).all(axis=1))
+        hom = coords[front] @ pm[:2, :3].T + pm[:2, 3]
+        wf = w[front]
+        sx = region.width / 2.0 * (1.0 + hom[:, 0] / wf)
+        sy = region.height / 2.0 * (1.0 + hom[:, 1] / wf)
+    finite = np.isfinite(sx) & np.isfinite(sy)
+    if not finite.all():
+        front, sx, sy = front[finite], sx[finite], sy[finite]
     cx = np.clip(np.floor(sx / cell_px), -_CELL_LIMIT, _CELL_LIMIT).astype(np.int64)
     cy = np.clip(np.floor(sy / cell_px), -_CELL_LIMIT, _CELL_LIMIT).astype(np.int64)
     keys = (cx + _CELL_LIMIT) * (2 * _CELL_LIMIT + 1) + (cy + _CELL_LIMIT)
@@ -491,7 +497,8 @@ def find_candidates(
     if len(pts) == 0:
         return []
     cur = np.array(current_co, dtype=np.float64)
-    d_world = np.linalg.norm(build_result.coords[pts] - cur, axis=1)
+    with np.errstate(invalid="ignore", over="ignore"):
+        d_world = np.linalg.norm(build_result.coords[pts] - cur, axis=1)
     if query_radius is not None:
         ok = d_world <= query_radius
         pts, d_screen, d_world = pts[ok], d_screen[ok], d_world[ok]
@@ -536,6 +543,7 @@ def _axis_sorted(build, axis_idx):
     if cached is None:
         values = build.coords[:, axis_idx]
         order = np.argsort(values, kind="stable")
+        order = order[np.isfinite(build.coords[order]).all(axis=1)]
         cached = (values[order], order)
         build._cache[("axis", axis_idx)] = cached
     return cached
