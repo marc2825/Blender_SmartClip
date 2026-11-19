@@ -153,27 +153,51 @@ def build_from_points(coords, names=None, exclude=()) -> BuildResult:
 # Scope collection
 # ---------------------------------------------------------------------------
 
+def _edited_meshes(context, active_obj):
+    """Meshes in Edit Mode (active first), or ``[]`` outside Edit Mode."""
+    if active_obj is None or active_obj.mode != "EDIT":
+        return []
+    found = [active_obj] if active_obj.type == "MESH" else []
+    for obj in getattr(context, "objects_in_mode", None) or ():
+        if obj.type == "MESH" and obj.mode == "EDIT" and obj not in found:
+            found.append(obj)
+    return found
+
+
 def _collect_scope_objects(context, active_obj):
-    """Return mesh objects that match the current Target Scope setting."""
+    """Return mesh objects that match the current Target Scope setting.
+
+    Whatever is being moved is removed later (whole objects in Object Mode,
+    the moving vertices in Edit Mode), so the scopes list what could be a
+    target in principle.
+    """
     scene = context.scene
     scope = scene.smartclip_target_scope
 
     if scope == "SELF":
+        # The meshes being edited (several with multi-object editing); in
+        # Object Mode the active object, which then moves as a whole.
+        edited = _edited_meshes(context, active_obj)
+        if edited:
+            return edited
         if active_obj and active_obj.type == "MESH":
             return [active_obj]
         return []
 
     if scope == "SELECTED":
-        return [
-            obj for obj in context.selected_objects
-            if obj.type == "MESH" and obj is not active_obj
-        ]
+        found = [obj for obj in context.selected_objects if obj.type == "MESH"]
+        for obj in _edited_meshes(context, active_obj):
+            if obj not in found:
+                found.append(obj)
+        return found
 
     if scope == "COLLECTION":
         coll = scene.smartclip_target_collection
         if coll:
-            # all_objects includes objects of nested child collections
-            return [obj for obj in coll.all_objects if obj.type == "MESH"]
+            # all_objects includes objects of nested child collections;
+            # hidden objects are skipped like in the All Visible scope.
+            return [obj for obj in coll.all_objects
+                    if obj.type == "MESH" and obj.visible_get()]
         return []
 
     # VISIBLE (default)
