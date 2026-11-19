@@ -289,6 +289,9 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         if not self._region or not self._rv3d:
             self.report({"WARNING"}, "Smart Clipping Move needs a 3D Viewport")
             return {"CANCELLED"}
+        # The view matrices are refreshed when the region redraws; make sure
+        # they match the current view (e.g. after a script changed it).
+        self._rv3d.update()
 
         self._start_world, self._movers = gather_movers(context)
         if not self._movers:

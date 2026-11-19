@@ -1,11 +1,16 @@
 name: UI Tests
 
 # Runs tests/ui_operator_test.py (simulated mouse and keyboard input in a real
-# Blender window) on a virtual display.  Manual only for now: it has not been
-# validated on GitHub-hosted runners yet, and a flaky GUI job should not block
-# pull requests.  Make it a required check once it has proven stable.
+# Blender window) on a virtual display.  Manual only for now: a GUI job on
+# software OpenGL should prove stable before it can block pull requests.
 on:
   workflow_dispatch:
+    inputs:
+      versions:
+        description: 'Blender versions as a JSON list, e.g. ["4.0.2", "5.2.4"]'
+        required: false
+        default: '["4.0.2", "5.2.4"]'
+        type: string
 
 permissions:
   contents: read
@@ -18,12 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # drawing differs between versions (4.0 has no point shader)
-          - blender: "4.0.2"
-            gpu_args: ""
-          - blender: "5.2.4"
-            gpu_args: "--gpu-backend opengl"
+        blender: ${{ fromJSON(inputs.versions || '["4.0.2", "5.2.4"]') }}
     env:
       BLENDER_VERSION: ${{ matrix.blender }}
     steps:
@@ -55,16 +55,21 @@ jobs:
       - name: Run UI Test on a Virtual Display
         env:
           SMARTCLIP_UI_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
+          # software OpenGL redraws slowly; give events time to be processed
           SMARTCLIP_UI_STEP: "0.8"
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           set -euxo pipefail
           mkdir -p "${SMARTCLIP_UI_SCREENSHOT_DIR}"
+          gpu_args="--gpu-backend opengl"
+          case "${BLENDER_VERSION}" in 4.0.*|4.1.*) gpu_args="" ;; esac
           xvfb-run -a -s "-screen 0 1920x1080x24" \
             "blender-${BLENDER_VERSION}-linux-x64/blender" --factory-startup \
-              --enable-event-simulate ${{ matrix.gpu_args }} \
+              --enable-event-simulate ${gpu_args} \
               --python tests/ui_operator_test.py
 
+      # Screenshots come out black on Xvfb with software OpenGL even when the
+      # checks pass, so they are only useful on real displays.
       - name: Upload Screenshots
         if: always()
         uses: actions/upload-artifact@v7

@@ -111,6 +111,9 @@ def _setup_scene():
 
 def _steps():
     win, area, region, rv3d = _view3d()
+    print(f"[ui:test] Blender {bpy.app.version_string}, window {win.width}x{win.height}, "
+          f"3D view region {region.width}x{region.height} at ({region.x}, {region.y}), "
+          f"step {STEP}s", flush=True)
     scene = bpy.context.scene
     scene.smartclip_enabled = True
     scene.smartclip_target_scope = "SELF"  # Object Mode + SELF = no snap targets
@@ -123,6 +126,7 @@ def _steps():
     rv3d.view_location = (0.5, 0.0, 0.0)
     rv3d.view_distance = 12.0
     rv3d.view_rotation = Euler((1.1, 0.0, 0.6)).to_quaternion()
+    rv3d.update()
     yield 0.5
 
     cx = region.x + region.width // 2
@@ -186,6 +190,7 @@ def _steps():
     yield STEP
     before = world()
     rv3d.view_rotation = rv3d.view_rotation @ Euler((0.0, 0.0, 0.5)).to_quaternion()
+    rv3d.update()
     area.tag_redraw()
     yield STEP
     ev("MOUSEMOVE", "NOTHING", dx=60)
@@ -195,6 +200,7 @@ def _steps():
     ev("ESC", "PRESS")
     yield STEP
     rv3d.view_rotation = Euler((1.1, 0.0, 0.6)).to_quaternion()
+    rv3d.update()
     yield STEP
 
     # 3. Axis constraint holds in world space; LMB confirms
@@ -297,6 +303,7 @@ def _steps():
 
     # 3b. Every selected object moves by the same world delta
     target_start = target.matrix_world.translation.copy()
+    target_start_loc = target.location.copy()
     target.select_set(True)
     yield from start_modal("multi_select")
     ev("MOUSEMOVE", "NOTHING", dx=70, dy=-20)
@@ -329,9 +336,44 @@ def _steps():
     check("redo_moves_again", ((world() - start_world) - d_child).length < 1e-4
           and ((target.matrix_world.translation - target_start) - d_target).length < 1e-4)
     child.location = start_loc
-    target.matrix_world.translation = target_start
+    target.location = target_start_loc
     target.select_set(False)
     bpy.context.view_layer.update()
+    yield STEP
+
+    check("target_put_back", (target.matrix_world.translation - target_start).length < 1e-6)
+
+    # Confirming before any mouse move registers no operation (no undo step)
+    registered = len(bpy.context.window_manager.operators)
+    yield from start_modal("confirm_unmoved")
+    ev("LEFTMOUSE", "PRESS")
+    ev("LEFTMOUSE", "RELEASE")
+    yield STEP
+    check("unmoved_confirm_not_registered",
+          len(bpy.context.window_manager.operators) == registered
+          and (world() - start_world).length < 1e-9)
+
+    # Numpad views work mid-move and the selection does not jump
+    yield from start_modal("numpad")
+    ev("MOUSEMOVE", "NOTHING", dx=40)
+    yield STEP
+    before_view = rv3d.view_rotation.copy()
+    before = world()
+    ev("NUMPAD_7", "PRESS")
+    ev("NUMPAD_7", "RELEASE")
+    yield STEP
+    rv3d.update()
+    ev("MOUSEMOVE", "NOTHING", dx=40)
+    yield STEP
+    check("numpad_view_changed", before_view.rotation_difference(rv3d.view_rotation).angle > 0.1)
+    check("numpad_no_jump", (world() - before).length < 1e-3,
+          f"jumped {(world() - before).length:.4f}")
+    ev("ESC", "PRESS")
+    yield STEP
+    check("numpad_esc_restores", (child.location - start_loc).length < 1e-6)
+    rv3d.view_rotation = Euler((1.1, 0.0, 0.6)).to_quaternion()
+    rv3d.view_perspective = "PERSP"
+    rv3d.update()
     yield STEP
 
     # 4. Hard snap (hold RMB) lands exactly on a target vertex
@@ -393,6 +435,7 @@ def _steps():
     # load replaced the screen, so the window, area and region are fetched
     # again (event_simulate on the old ones crashes Blender).
     win, area, region, rv3d = _view3d()
+    rv3d.update()
     cx = region.x + region.width // 2
     cy = region.y + region.height // 2
     for dx in (5, 0):
