@@ -40,7 +40,7 @@ blender --factory-startup --enable-event-simulate --python tests/ui_operator_tes
 
 ### Manual
 
-`.github/workflows/ui-tests.yml` runs the same test on a virtual display. It is started by hand (Actions > UI Tests) until it has proven stable on GitHub-hosted runners.
+`.github/workflows/ui-tests.yml` runs the same test on a virtual display (Xvfb, software OpenGL, `SMARTCLIP_UI_STEP=0.8`). It is started by hand (Actions > UI Tests, optionally with a list of Blender versions) until it has proven stable on GitHub-hosted runners. Screenshots taken there come out black even when the checks pass.
 
 How snapping feels is still worth checking by hand after UI changes. `tests/manual_ui_setup.py` builds a scene with targets along each axis, a grid that exceeds the vertex budget, and a collection for Manual Collection scope, then prints what to try.
 

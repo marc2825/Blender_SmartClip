@@ -6,6 +6,16 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-20
+
+### Fixed
+
+- Target Scope: in Edit Mode, Selected now includes the unselected vertices of the active mesh, and Self Only includes every mesh being edited, not only the active one. Manual Collection no longer snaps to hidden objects.
+- Confirming a move before moving the mouse no longer adds an undo step.
+- Numpad views, zoom and `Home` work during a move.
+- Vertices with invalid (NaN or infinite) coordinates are ignored.
+- Calling the operator from a script with a linked (non-editable) active object no longer moves it or fails.
+
 ## [1.3.0] - 2026-11-18
 
 ### Fixed

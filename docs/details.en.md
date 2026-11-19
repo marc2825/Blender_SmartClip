@@ -13,6 +13,7 @@ This page expands on [Usage](../README.en.md#usage) in the README.
 | `X` / `Y` / `Z` | Move along that axis only |
 | `Shift+X` / `Shift+Y` / `Shift+Z` | Move in the plane excluding that axis |
 | Middle mouse / wheel | Orbit, pan, or zoom without ending the move |
+| Numpad / `Home` | Switch views, zoom, or frame all without ending the move |
 
 Press the same key again to release an axis or plane constraint. Constraints use the global axes; a constrained axis is drawn in red (X), green (Y), or blue (Z), and snapped positions stay on the constrained axis or plane.
 
@@ -31,10 +32,10 @@ After confirming, correct the move numerically with **Offset** in the **Adjust L
 
 | Target Scope | Snap targets |
 |---|---|
-| Self Only | The mesh being edited. Use it in Edit Mode to snap to other vertices of the same mesh |
-| Selected | Selected meshes other than the active one |
+| Self Only | The meshes being edited (all of them with multi-object editing). Use it in Edit Mode to snap to other vertices of the same mesh |
+| Selected | Selected meshes: in Object Mode the ones other than the active object, in Edit Mode including the rest of the meshes being edited |
 | All Visible (default) | Every visible mesh |
-| Manual Collection | Meshes in the chosen collection and its child collections |
+| Manual Collection | Visible meshes in the chosen collection and its child collections |
 
 ## Axis Align
 
@@ -66,7 +67,7 @@ Snap targets are built when a move starts and are not rebuilt during the move.
 
 - Targets are vertices of the meshes in Target Scope. Objects that are not meshes, such as curves and text, are never targets.
 - The geometry is taken after modifiers.
-- Objects in Edit Mode use their edit mesh.
+- Objects in Edit Mode, and objects sharing their mesh, use the edit mesh without modifiers: leaving out the moving vertices needs vertex indices, which do not carry over to modified geometry.
 
 ### What is being moved is excluded
 
