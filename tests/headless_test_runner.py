@@ -467,24 +467,7 @@ def _perspective_view(eye, target, fov_deg=50.0, size=(1600, 900)):
 
 
 def _build_from_points(coords, names=None, exclude=()):
-    if hasattr(detector, "build_from_points"):
-        return detector.build_from_points(coords, names=names, exclude=exclude)
-    points = [Vector(c) for c in coords]
-    names = names or [f"P{i}" for i in range(len(points))]
-    tree = detector.kdtree.KDTree(len(points))
-    for i, co in enumerate(points):
-        tree.insert(co, i)
-    tree.balance()
-    return detector.BuildResult(
-        tree=tree,
-        point_meta=[detector._PointMeta(obj_name=n, point_type="POINT") for n in names],
-        point_count=len(points),
-        points=points,
-        axis_x=sorted((co.x, i) for i, co in enumerate(points)),
-        axis_y=sorted((co.y, i) for i, co in enumerate(points)),
-        axis_z=sorted((co.z, i) for i, co in enumerate(points)),
-        exclude_indices=set(exclude),
-    )
+    return detector.build_from_points(coords, names=names, exclude=exclude)
 
 
 def case_axis_align_screen_gate():
@@ -1029,6 +1012,151 @@ def case_axis_align_matches_brute_force_perspective():
     assert checked > 60, checked
 
 
+# --- Target Scope collection (#15) ----------------------------------------
+
+def _edit_select_only_vertex(obj, index):
+    bm = bmesh.from_edit_mesh(obj.data)
+    for v in bm.verts:
+        v.select = False
+    bm.verts.ensure_lookup_table()
+    bm.verts[index].select = True
+    bm.select_flush_mode()
+    bmesh.update_edit_mesh(obj.data)
+
+
+def _points_by_object(result):
+    counts = {}
+    for m in result.point_meta:
+        counts[m.obj_name] = counts.get(m.obj_name, 0) + 1
+    return counts
+
+
+def case_edit_selected_scope_includes_active_rest():
+    _clear_scene()
+    a = _add_cube("ES_A", (0.0, 0.0, 0.0))
+    b = _add_cube("ES_B", (4.0, 0.0, 0.0))
+    bpy.ops.object.select_all(action="DESELECT")
+    b.select_set(True)
+    a.select_set(True)
+    bpy.context.view_layer.objects.active = a
+    bpy.context.scene.smartclip_target_scope = "SELECTED"
+    bpy.ops.object.mode_set(mode="EDIT")       # both are meshes: both enter Edit Mode
+    try:
+        _edit_select_only_vertex(a, 0)
+        _edit_select_only_vertex(b, 0)
+        pivot, movers = ops.gather_movers(bpy.context)
+        with _temporary_budget(100000):
+            result = detector.build_spatial_tree(
+                bpy.context, active_obj=a,
+                moving_verts={m.obj: set(m.init_cos) for m in movers})
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    # In Edit Mode only the selected vertices move; the rest of every selected
+    # mesh, the active one included, are targets.
+    assert _points_by_object(result) == {"ES_A": 7, "ES_B": 7}, _points_by_object(result)
+
+
+def case_edit_self_scope_covers_all_edited_meshes():
+    _clear_scene()
+    a = _add_cube("SE_A", (0.0, 0.0, 0.0))
+    b = _add_cube("SE_B", (4.0, 0.0, 0.0))
+    _add_cube("SE_Other", (8.0, 0.0, 0.0))
+    bpy.ops.object.select_all(action="DESELECT")
+    b.select_set(True)
+    a.select_set(True)
+    bpy.context.view_layer.objects.active = a
+    bpy.context.scene.smartclip_target_scope = "SELF"
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        _edit_select_only_vertex(a, 0)
+        _edit_select_only_vertex(b, 0)
+        pivot, movers = ops.gather_movers(bpy.context)
+        with _temporary_budget(100000):
+            result = detector.build_spatial_tree(
+                bpy.context, active_obj=a,
+                moving_verts={m.obj: set(m.init_cos) for m in movers})
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    # Self Only = the meshes being edited (all of them), not other objects.
+    assert _points_by_object(result) == {"SE_A": 7, "SE_B": 7}, _points_by_object(result)
+
+
+def case_collection_scope_skips_hidden():
+    _clear_scene()
+    active = _add_cube("CH_Active", (0.0, 0.0, 0.0))
+    shown = _add_cube("CH_Shown", (3.0, 0.0, 0.0))
+    hidden = _add_cube("CH_Hidden", (6.0, 0.0, 0.0))
+    disabled = _add_cube("CH_Disabled", (9.0, 0.0, 0.0))
+    coll = _new_collection("SC_Hidden_Test")
+    for obj in (shown, hidden, disabled):
+        _link_to_collection(obj, coll)
+    hidden.hide_set(True)
+    disabled.hide_viewport = True
+    _select_only(active)
+    scene = bpy.context.scene
+    scene.smartclip_target_scope = "COLLECTION"
+    scene.smartclip_target_collection = coll
+    with _temporary_budget(100000):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+    # Objects you cannot see are not snap targets (as with All Visible).
+    assert _points_by_object(result) == {"CH_Shown": 8}, _points_by_object(result)
+
+
+# --- Robustness (#17) -------------------------------------------------------
+
+def case_non_finite_vertices_dropped():
+    import math
+    import warnings
+    _clear_scene()
+    active = _add_cube("NF_Active", (0.0, 0.0, 0.0))
+    obj = _add_cube("NF_Bad", (3.0, 0.0, 0.0))
+    # (assigning inf through .co clamps it to FLT_MAX; foreach_set keeps it)
+    import numpy as np
+    co = np.empty(len(obj.data.vertices) * 3, dtype=np.float32)
+    obj.data.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    co[0] = (math.nan, 0.0, 0.0)
+    co[1] = (math.inf, 1.0, 1.0)
+    obj.data.vertices.foreach_set("co", co.ravel())
+    obj.data.update()
+    _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+    region, rv3d = _perspective_view((1.0, -12.0, 6.0), (2.0, 0.0, 0.0))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")             # numpy RuntimeWarning -> error
+        with _temporary_budget(100000):
+            result = detector.build_spatial_tree(bpy.context, active_obj=active)
+        current = Vector((3.0, 0.0, 0.0))
+        mouse = utils.world_to_screen(region, rv3d, current)
+        detector.find_candidates(result, current, region, rv3d, mouse, 30, 50.0)
+        detector.find_axis_candidates(result, current, region, rv3d, mouse, 30, {"X", "Y", "Z"})
+    assert result.point_count == 6, result.point_count
+    assert all(math.isfinite(v) for co in result.points for v in co)
+
+
+def case_execute_skips_non_editable_objects():
+    _clear_scene()
+    lib_obj = _add_cube("NE_Linked", (2.0, 0.0, 0.0))
+    # bpy.app.tempdir: some bundled Pythons (Windows 4.0.2) lack tempfile
+    path = os.path.join(bpy.app.tempdir, "smartclip_lib.blend")
+    bpy.data.libraries.write(path, {lib_obj})
+    bpy.data.objects.remove(lib_obj)
+    with bpy.data.libraries.load(path, link=True) as (data_from, data_to):
+        data_to.objects = ["NE_Linked"]
+    linked = data_to.objects[0]
+    bpy.context.scene.collection.objects.link(linked)
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = linked
+    bpy.context.scene.smartclip_enabled = True
+    assert linked.library is not None
+    before = linked.matrix_world.translation.copy()
+    # A linked (non-editable) active object with nothing selected: nothing to
+    # move, so the operator cancels instead of raising.
+    result = bpy.ops.view3d.smartclip_move(offset=(1.0, 0.0, 0.0))
+    assert result == {"CANCELLED"}, result
+    assert (linked.matrix_world.translation - before).length < 1e-9
+
+
 CASES = {
     "scene_props": case_scene_properties_registered,
     "scope_self": case_scope_self,
@@ -1064,6 +1192,11 @@ CASES = {
     "find_brute_force_persp": case_find_matches_brute_force_perspective,
     "axis_skips_excluded_run": case_axis_align_skips_excluded_run,
     "axis_brute_force_persp": case_axis_align_matches_brute_force_perspective,
+    "edit_selected_includes_active": case_edit_selected_scope_includes_active_rest,
+    "edit_self_all_edited_meshes": case_edit_self_scope_covers_all_edited_meshes,
+    "collection_skips_hidden": case_collection_scope_skips_hidden,
+    "non_finite_vertices_dropped": case_non_finite_vertices_dropped,
+    "execute_skips_non_editable": case_execute_skips_non_editable_objects,
 }
 
 
