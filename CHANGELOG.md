@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-21
+
+### Fixed
+
+- During a move, navigation keys and mouse input are passed to Blender only when the keymap binds them to view navigation. In 1.3.1, `Ctrl+Numpad+/-` could change the selection in Edit Mode and `Ctrl+Numpad0` could set the camera; `Alt+Wheel` could change the current frame in earlier versions as well.
+
 ## [1.3.1] - 2026-11-20
 
 ### Fixed

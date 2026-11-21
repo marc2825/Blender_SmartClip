@@ -15,6 +15,8 @@ This page expands on [Usage](../README.en.md#usage) in the README.
 | Middle mouse / wheel | Orbit, pan, or zoom without ending the move |
 | Numpad / `Home` | Switch views, zoom, or frame all without ending the move |
 
+Mouse and numpad input works mid-move only where the keymap binds it to view navigation; shortcuts that change anything else, such as `Ctrl+Numpad+` (Select More) or `Alt+Wheel` (change frame), do not fire.
+
 Press the same key again to release an axis or plane constraint. Constraints use the global axes; a constrained axis is drawn in red (X), green (Y), or blue (Z), and snapped positions stay on the constrained axis or plane.
 
 Close to a candidate, the selection is pulled toward it, more strongly the closer it gets (soft snap). The guide lines and the lower-left HUD show which object you are heading for and the distance.
