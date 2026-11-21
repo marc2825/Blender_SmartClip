@@ -56,6 +56,7 @@ Set in **Preferences → Add-ons → Smart Clipping**.
 | Snap Threshold (px) | 30 | Screen distance within which candidates are found |
 | Max Vertex Budget | 50,000 | Maximum number of vertices registered as snap targets ([Vertex budget](#vertex-budget)) |
 | Guide Color / Hard Snap Color | Magenta / cyan | Colors of the guides and HUD (the second during hard snap) |
+| Snap Search (Advanced Settings) | Screen-space Grid | How candidates are looked up ([How candidates are looked up](#how-candidates-are-looked-up-snap-search)) |
 
 **Add Default Hotkeys** and **Clear Hotkeys** on the same page restore or remove the `Shift+G` assignment. A removed assignment is saved in the preferences and stays removed after restarting Blender.
 
@@ -105,6 +106,19 @@ The moving point is:
 - Edit Mode: the center of the selected vertices
 
 The search range in 3D matches half the screen at the depth of the moving point, so candidates are found the same way relative to the screen whether the scene is modeled in millimeters or kilometers.
+
+### How candidates are looked up (Snap Search)
+
+**Snap Search** under **Advanced Settings** in the add-on preferences chooses how candidates are looked up. Both methods find the same candidates and pick the same one; only the speed differs.
+
+| Snap Search | How it works |
+|---|---|
+| Screen-space Grid (default) | All snap points are projected onto the screen and sorted into a grid. Each mouse move checks only the grid cells around the moving point. After the view changes, the next mouse move projects them again |
+| 3D KD-tree (experimental) | A 3D KD-tree of the snap points is built when the move starts. Each mouse move takes from it only the points in the region that appears within Snap Threshold on screen (a cone from the viewpoint), then projects and checks those. Changing the view does not rebuild it |
+
+In measurements the Screen-space Grid was faster in almost every case: with 100,000 points, a mouse move took about 0.2 ms with the grid and about 4 ms with the KD-tree. The KD-tree gets much slower when points crowd around the moving point: with 100,000 crowded points a mouse move took about 0.5 s. It also takes longer to start a move (about 1.2 s for 500,000 points). Keep the default unless you are comparing the two. The results are in the [developer guide](DEVELOPMENT.md#grid-vs-kd-tree).
+
+While the KD-tree is used, the Performance line in the panel ends with `[KD-tree]`.
 
 ## Moving
 

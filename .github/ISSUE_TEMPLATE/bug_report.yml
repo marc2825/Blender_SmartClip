@@ -53,6 +53,17 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: search
+    attributes:
+      label: Snap Search (Preferences > Advanced Settings)
+      options:
+        - Screen-space Grid (default)
+        - 3D KD-tree (experimental)
+      default: 0
+    validations:
+      required: true
+
   - type: textarea
     id: steps
     attributes:

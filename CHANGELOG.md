@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+
+- **Advanced Settings → Snap Search** in the add-on preferences: an experimental **3D KD-tree** search next to the default **Screen-space Grid**. Both find the same candidates; the grid stays the default and was faster in almost every measured case (see `docs/DEVELOPMENT.md`). (#19)
+
+### Changed
+
+- The panel's Performance line reads `Snap points: N` instead of `Vertices in tree: N`, and ends with `[KD-tree]` when the KD-tree search is used.
+
 ## [1.3.2] - 2026-11-21
 
 ### Fixed

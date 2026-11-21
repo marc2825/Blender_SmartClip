@@ -7,7 +7,7 @@ This guide is for working on the add-on itself. For installing and using it, see
 | Path | Contents |
 |---|---|
 | `smart_clipping/ops.py` | The modal move operator: what moves, input handling, snapping |
-| `smart_clipping/detector.py` | Collecting snap points and searching them in screen space |
+| `smart_clipping/detector.py` | Collecting snap points and searching them: a screen-space grid (default) or a 3D KD-tree (Advanced Settings), which return the same candidates |
 | `smart_clipping/drawing.py` | Guide lines and HUD |
 | `smart_clipping/prefs.py`, `utils.py` | Preferences and shared helpers |
 | `smart_clipping/__init__.py` | `bl_info`, panel, keymaps, scene properties and their migration |
@@ -18,7 +18,7 @@ This guide is for working on the add-on itself. For installing and using it, see
 
 ### Headless
 
-Covers the snap tree, candidate search, and the operator's `execute` without a window. CI runs it on every pull request.
+Covers snap point collection, candidate search with both backends (they must return identical candidate lists), and the operator's `execute` without a window. CI runs it on every pull request.
 
 ```sh
 blender --background --factory-startup --python tests/headless_test_runner.py
@@ -37,6 +37,7 @@ blender --factory-startup --enable-event-simulate --python tests/ui_operator_tes
 
 - It needs a display, and real mouse and keyboard input is ignored while it runs.
 - Set `SMARTCLIP_UI_SCREENSHOT_DIR` to a folder to save screenshots of the overlays.
+- Set `SMARTCLIP_UI_BACKEND=KDTREE` to run the checks with the KD-tree search instead of the default grid.
 
 ### Manual
 
@@ -60,11 +61,37 @@ BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER
 
 ### Benchmark
 
-`tests/benchmark_snap.py` measures build time, search time, memory, and recall against a brute-force ground truth on synthetic point clouds (1k to 1M points, uniform and crowded, different scene scales). It reports numbers and does not pass or fail. `--impl` points it at another copy of the package, for example a release exported with `git archive vX.Y.Z smart_clipping`, to compare.
+`tests/benchmark_snap.py` runs every search backend on the same synthetic point clouds (10k to 500k points, uniform and crowded, different scene scales) and reports index build time, query time (median, p95), the cost of the first query after a view change, memory, the share of candidates missed against a brute-force ground truth, and whether the backends return identical lists. It prints a Markdown table at the end and does not pass or fail. `--sizes` picks the point counts, and `--impl` points it at another copy of the package, for example a release exported with `git archive vX.Y.Z smart_clipping`, to compare.
 
 ```sh
 blender --background --factory-startup --python tests/benchmark_snap.py -- --quick
 ```
+
+#### Grid vs. KD-tree
+
+Measured for [#19](https://github.com/marc2825/Blender_SmartClip/issues/19) with Blender 5.3.0 on Windows 11 (Intel Core Ultra 9 285K), default options: 200 timed queries, 12 view changes, and 40 queries with full candidate lists per case. The clouds fill a 10-unit cube ("crowded": 95% of the points in a blob with σ = 0.05) and are seen in perspective from about 23 units away at 1600 × 900 px; Snap Threshold is 30 px. Times in milliseconds.
+
+| Cloud | Points | Index build, grid / KD-tree | Mouse move, grid (median / p95) | Mouse move, KD-tree (median / p95) | First move after a view change, grid / KD-tree (median) |
+|---|---|---|---|---|---|
+| uniform | 10,000 | 0.9 / 24 | 0.07 / 0.09 | 0.49 / 0.62 | 0.57 / 0.44 |
+| uniform | 50,000 | 3.6 / 138 | 0.15 / 0.23 | 2.1 / 2.7 | 3.0 / 2.1 |
+| uniform | 100,000 | 7.4 / 257 | 0.24 / 0.33 | 4.4 / 6.8 | 6.8 / 4.3 |
+| uniform | 500,000 | 53 / 1,242 | 1.2 / 1.7 | 32 / 39 | 52 / 44 |
+| crowded | 10,000 | 2.4 / 25 | 0.82 / 1.0 | 5.9 / 8.3 | 1.1 / 5.8 |
+| crowded | 50,000 | 2.1 / 133 | 4.5 / 6.3 | 71 / 83 | 6.3 / 68 |
+| crowded | 100,000 | 5.0 / 248 | 9.8 / 13 | 468 / 537 | 14 / 464 |
+| crowded | 500,000 | 34 / 1,366 | 61 / 77 | 11,054 / 12,206 | 90 / 11,028 |
+
+| Points | Memory kept by the index, grid / KD-tree (MB) | Peak Python allocation while building, grid / KD-tree (MB) |
+|---|---|---|
+| 10,000 | 0.3 / 0.3 | 0.9 / 2.3 |
+| 50,000 | 1.5 / 1.7 | 4.4 / 11.3 |
+| 100,000 | 3.1 / 3.4 | 8.9 / 15.2 |
+| 500,000 | 15.3 / 17.2 | 44.4 / 29.1 |
+
+- Accuracy: both returned every ground-truth candidate (miss rate 0) and the ground-truth best as the first result in every query, and their full candidate lists were identical, also at scene scales 0.001 and 1000.
+- Starting a move next to a 1M-vertex mesh: 34 ms (grid) vs. 167 ms (KD-tree) with Max Vertex Budget 50,000, and 57 ms vs. 2,486 ms with a budget of 1,000,000.
+- The grid is faster everywhere except the first mouse move after a view change in uniform clouds, where the KD-tree takes 15–37% less time. Once the cone of sight is narrowed down, the KD-tree's cost is the number of points around the cursor: `mathutils.kdtree` returns and sorts one Python tuple per point found, while the grid works on numpy arrays. Crowded scenes are the worst case.
 
 ## CI
 
