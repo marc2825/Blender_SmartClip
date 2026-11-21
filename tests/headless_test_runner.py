@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 
@@ -106,14 +107,17 @@ def _ordered_unique_obj_names(build_result):
 
 
 @contextmanager
-def _temporary_budget(max_vertex_budget):
+def _temporary_budget(max_vertex_budget, search_backend=None):
     # Always monkeypatch: the real preference clamps to >= 100, which would
-    # silently change what the small-budget cases test.
+    # silently change what the small-budget cases test.  Without
+    # *search_backend* the dummy has no such setting (the default applies).
     original_fn = detector.get_addon_prefs
 
     class _DummyPrefs:
         def __init__(self, value):
             self.max_vertex_budget = value
+            if search_backend is not None:
+                self.search_backend = search_backend
 
     detector.get_addon_prefs = lambda _ctx: _DummyPrefs(int(max_vertex_budget))
     try:
@@ -283,7 +287,7 @@ def case_stress_100k_vertices():
     types = {m.point_type for m in result.point_meta}
     assert types == {"POINT", "BOUNDS"}
     print(f"[smartclip:test] stress build elapsed: {elapsed:.4f}s "
-          f"(tree points: {result.point_count})")
+          f"(snap points: {result.point_count})")
 
 
 def case_budget_partial_fill():
@@ -1206,6 +1210,289 @@ def case_navigation_binding_rules():
         assert name in ops._VIEW_OPERATORS
 
 
+# --- Search backends: screen-space grid vs. KD-tree (#19) -------------------
+
+def _ortho_view(eye, target, half_height, size=(1600, 900)):
+    """Orthographic view from *eye* towards *target*, 2 * half_height units tall."""
+    width, height = size
+    half_width = half_height * width / height
+    near, far = 0.1, 1000.0
+    proj = Matrix((
+        (1.0 / half_width, 0.0, 0.0, 0.0),
+        (0.0, 1.0 / half_height, 0.0, 0.0),
+        (0.0, 0.0, -2.0 / (far - near), -(far + near) / (far - near)),
+        (0.0, 0.0, 0.0, 1.0),
+    ))
+    eye, target = Vector(eye), Vector(target)
+    fwd = (target - eye).normalized()
+    right = fwd.cross(Vector((0.0, 0.0, 1.0))).normalized()
+    up = right.cross(fwd)
+    rot = Matrix((right, up, -fwd))
+    view = rot.to_4x4()
+    view.translation = -(rot @ eye)
+    region = SimpleNamespace(width=width, height=height)
+    rv3d = SimpleNamespace(perspective_matrix=proj @ view, view_matrix=view,
+                           is_perspective=False, view_perspective="ORTHO",
+                           view_distance=(target - eye).length)
+    return region, rv3d
+
+
+def _candidate_keys(cands):
+    return [(c.type, tuple(c.location), tuple(c.reference_co), c.screen_dist, c.score,
+             c.target_name) for c in cands]
+
+
+def _both_backends(build, current, region, rv3d, mouse, radius, thr=30):
+    """Every candidate of each backend; fails unless they are identical."""
+    found = [detector.find_candidates(build, current, region, rv3d, mouse,
+                                      snap_distance_px=thr, query_radius=radius,
+                                      max_results=10 ** 9, backend=backend)
+             for backend in utils.SEARCH_BACKENDS]
+    grid, kd = (_candidate_keys(f) for f in found)
+    if grid != kd:
+        first = next((i for i, (a, b) in enumerate(zip(grid, kd)) if a != b), min(len(grid), len(kd)))
+        raise AssertionError(f"backends differ at #{first} (grid {len(grid)}, kd-tree {len(kd)}): "
+                             f"{grid[first:first + 1]} vs {kd[first:first + 1]}")
+    return found[0]
+
+
+def case_backends_match_across_views():
+    import random
+    rnd = random.Random(19)
+    spread = [(rnd.uniform(0, 10), rnd.uniform(0, 10), rnd.uniform(0, 10)) for _ in range(3000)]
+    blob = [(5.0 + rnd.gauss(0, 0.03), 5.0 + rnd.gauss(0, 0.03), 5.0 + rnd.gauss(0, 0.03))
+            for _ in range(1500)]
+    coords = spread + blob + spread[:200]          # crowded blob and coincident points
+    names = [f"Obj{i % 7}" for i in range(len(coords))]
+    build = _build_from_points(coords, names=names)
+    views = [
+        _perspective_view((5.0, -15.0, 8.0), (5.0, 5.0, 5.0)),
+        _perspective_view((-12.0, 3.0, 14.0), (5.0, 5.0, 5.0)),
+        # inside the cloud: many points behind or beside the viewer
+        _perspective_view((5.0, 5.0, 5.5), (5.0, 9.0, 4.0)),
+        _ortho_view((20.0, -20.0, 15.0), (5.0, 5.0, 5.0), 8.0),
+        _top_view(),
+    ]
+    noise = lambda s: Vector((rnd.uniform(-s, s), rnd.uniform(-s, s), rnd.uniform(-s, s)))
+    with_candidates = brute_checked = 0
+    # Views are revisited, so the grid rebuilds its screen index while the
+    # KD-tree stays as it is.
+    for rnd_pass in range(2):
+        for v, (region, rv3d) in enumerate(views):
+            for k in range(24):
+                base = Vector((5.0, 5.0, 5.0)) if k % 3 == 0 else Vector(spread[rnd.randrange(3000)])
+                current = base + noise(0.05 if k % 3 == 0 else 0.3)
+                mouse = utils.world_to_screen(region, rv3d, current)
+                if mouse is None:
+                    continue
+                for radius in (6.0, 0.05, None):
+                    cands = _both_backends(build, current, region, rv3d, mouse, radius)
+                    with_candidates += bool(cands)
+                # a mouse position other than the moving point's projection
+                shifted = mouse + Vector((rnd.uniform(-40, 40), rnd.uniform(-40, 40)))
+                _both_backends(build, current, region, rv3d, shifted, 6.0)
+                if rnd_pass == 0 and k % 6 == 1:
+                    expected = _brute_force_best(coords, region, rv3d, current, mouse, 30, 6.0)
+                    top = detector.find_candidates(build, current, region, rv3d, mouse, 30, 6.0,
+                                                   backend=utils.SEARCH_KDTREE)
+                    if expected is None:
+                        assert not top, (v, k)
+                    else:
+                        brute_checked += 1
+                        assert top and (top[0].location - Vector(coords[expected])).length < 1e-5, (v, k)
+    assert with_candidates > 400, with_candidates
+    assert brute_checked >= 15, brute_checked
+
+
+def case_backends_match_edge_cases():
+    import math
+    region, rv3d = _perspective_view((0.0, -10.0, 3.0), (0.0, 0.0, 1.0))
+    eye = Vector((0.0, -10.0, 3.0))
+    ray = (Vector((0.0, 0.0, 1.0)) - eye).normalized()
+    side = ray.cross(Vector((0.0, 0.0, 1.0))).normalized()
+    # One line of sight: same spot on screen, different depths; one point
+    # behind the viewer on the same line.
+    line = [eye + ray * t for t in (3.0, 5.0, 8.0, 13.0)] + [eye - ray * 2.0]
+    # Around the right border of the view (at depth 6 it is about 5 units
+    # to the side): the last three are off screen.
+    edge = [eye + ray * 6.0 + side * s for s in (4.6, 4.8, 5.0, 5.2, 5.6)]
+    bad = [(math.nan, 0.0, 0.0), (0.0, math.inf, 1.0)]
+    coords = [tuple(c) for c in line + edge] + bad + [tuple(line[1])]   # last: coincident
+    names = ["L3", "L5", "L8", "L13", "Behind", "E1", "E2", "E3", "E4", "E5", "Nan", "Inf", "L5b"]
+    build = _build_from_points(coords, names=names)
+
+    current = eye + ray * 6.0 + side * 0.001
+    mouse = utils.world_to_screen(region, rv3d, current)
+    cands = _both_backends(build, current, region, rv3d, mouse, None)
+    order = [c.target_name for c in cands]
+    # nearest in 3D among the overlapping ones; the coincident copy right after it
+    assert order[:2] == ["L5", "L5b"], order
+    assert "Behind" not in order and "Nan" not in order and "Inf" not in order, order
+    _both_backends(build, current, region, rv3d, mouse, 2.5)
+
+    # Moving point near the border of the view, candidates partly off screen
+    off_screen = 0
+    for s in (4.7, 4.9, 5.1):
+        cur = eye + ray * 6.0 + side * s
+        m = utils.world_to_screen(region, rv3d, cur)
+        cands = _both_backends(build, cur, region, rv3d, m, 10.0, thr=200)
+        off_screen += sum(utils.world_to_screen(region, rv3d, c.location).x > region.width
+                          for c in cands)
+    assert off_screen >= 3, off_screen
+
+    # A degenerate (singular) view matrix: the KD-tree cannot narrow by the
+    # cone and checks every point, which still gives the same result.
+    flat = SimpleNamespace(perspective_matrix=Matrix(((0.1, 0.0, 0.0, 0.0), (0.0, 0.1, 0.0, 0.0),
+                                                      (0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))),
+                           view_matrix=Matrix.Identity(4))
+    flat_region = SimpleNamespace(width=1000, height=1000)
+    flat_mouse = utils.world_to_screen(flat_region, flat, current)
+    assert len(_both_backends(build, current, flat_region, flat, flat_mouse, None, thr=200)) > 1
+
+    # Excluded points (the moving geometry) are skipped by both
+    build_ex = _build_from_points(coords, names=names, exclude={1, 12})
+    cands = _both_backends(build_ex, current, region, rv3d, mouse, None)
+    assert [c.target_name for c in cands][:1] == ["L8"], [c.target_name for c in cands]
+
+    # A point exactly at the search radius counts, also far from the origin
+    # where the KD-tree's float32 coordinates are coarse.  The coordinates are
+    # float64 values that float32 cannot hold exactly.
+    rng = np.random.default_rng(5)
+    for offset, unit in (((0.0, 0.0, 0.0), 1.0),
+                         ((1.0e4, -2.0e4, 3.0e3), 1.0),
+                         ((0.0, 0.0, 0.0), 1.0e-3)):
+        pts = np.array(offset) + rng.uniform(-1.0, 1.0, size=(400, 3)) * unit
+        far_build = _build_from_points(pts)
+        center = Vector(offset)
+        views = (_perspective_view(center + Vector((0.0, -4.0, 1.5)) * unit, center),
+                 _ortho_view(center + Vector((3.0, -4.0, 2.0)) * unit, center, 1.5 * unit))
+        for view_region, view in views:
+            for i in range(0, 400, 20):
+                cur = Vector(pts[i] + np.array((0.01, -0.02, 0.015)) * unit)
+                j = (i + 7) % 400
+                # the radius exactly equal to the distance the search computes
+                exact = float(detector._distances(far_build.coords[[j]], np.array(cur))[0])
+                m = utils.world_to_screen(view_region, view, cur)
+                cands = _both_backends(far_build, cur, view_region, view, m, exact, thr=2000)
+                locs = {tuple(c.location) for c in cands}
+                assert tuple(Vector(far_build.coords[j])) in locs, (offset, unit, i)
+
+
+def case_kdtree_cone_rim():
+    # Points on the rim of the snap disk (1e-6 px inside or outside) at depths
+    # across the whole clip range: the KD-tree's chain of spheres around the
+    # cone of sight must hold every point inside, as the grid finds them.
+    rng = np.random.default_rng(23)
+    thr = 30.0
+    views = (_perspective_view((2.0, -9.0, 4.0), (0.0, 0.0, 0.5)),
+             _perspective_view((300.0, -900.0, 400.0), (0.0, 0.0, 0.5), fov_deg=10.0),
+             _ortho_view((6.0, -8.0, 5.0), (0.0, 0.0, 0.5), 3.0))
+    rim_found = 0
+    for region, rv3d in views:
+        inv = np.linalg.inv(np.array(rv3d.perspective_matrix, dtype=np.float64))
+        width, height = region.width, region.height
+        for _ in range(4):
+            mouse = Vector((rng.uniform(100, width - 100), rng.uniform(100, height - 100)))
+            n = 3000
+            angle = rng.uniform(0.0, 2.0 * np.pi, n)
+            dist = thr * rng.choice([1.0 - 1e-6, 1.0 + 1e-6, 0.999, 0.5], n)
+            sx = mouse.x + dist * np.cos(angle)
+            sy = mouse.y + dist * np.sin(angle)
+            ndc_z = rng.uniform(-1.0, 1.0, n)       # near to far clip
+            hom = np.stack([2 * sx / width - 1, 2 * sy / height - 1, ndc_z, np.ones(n)], axis=1) @ inv.T
+            pts = hom[:, :3] / hom[:, 3:4]
+            build = _build_from_points(pts)
+            # moving point somewhere in the cloud; the mouse is not its projection
+            current = Vector(pts[rng.integers(n)])
+            for radius in (None, float(np.linalg.norm(pts - np.array(current), axis=1).max()) / 3):
+                cands = _both_backends(build, current, region, rv3d, mouse, radius, thr=thr)
+                rim_found += sum(c.screen_dist > thr * 0.9999 for c in cands)
+    assert rim_found > 1000, rim_found
+
+
+def case_search_backend_setting():
+    prop = smart_clipping.prefs.SMARTCLIP_AddonPreferences.bl_rna.properties["search_backend"]
+    # Existing users keep the screen-space grid.
+    assert prop.default == utils.SEARCH_GRID, prop.default
+    assert [item.identifier for item in prop.enum_items] == list(utils.SEARCH_BACKENDS)
+    for bad in (lambda: detector.build_from_points([(0, 0, 0)], backend="OCTREE"),
+                lambda: detector.find_candidates(detector.build_from_points([(0, 0, 0)]),
+                                                 Vector(), *_top_view(), (500, 500),
+                                                 backend="OCTREE")):
+        try:
+            bad()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("an unknown backend was accepted")
+
+    _clear_scene()
+    active = _add_cube("SB_Active", (0.0, 0.0, 0.0))
+    _add_cube("SB_Cube", (3.0, 0.0, 0.0))
+    for i, name in enumerate(("SB_GridA", "SB_GridB", "SB_GridC")):
+        _create_grid_object(name, (8.0 + 12.0 * i, 0.0, 0.0), 30, 30)
+    _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+    builds = {}
+    for backend in (None,) + utils.SEARCH_BACKENDS:
+        with _temporary_budget(1000, backend):
+            builds[backend] = detector.build_spatial_tree(bpy.context, active_obj=active)
+    default, grid, kd = builds[None], builds[utils.SEARCH_GRID], builds[utils.SEARCH_KDTREE]
+    assert default.backend == grid.backend == utils.SEARCH_GRID
+    assert kd.backend == utils.SEARCH_KDTREE
+    # Collection, exclusion and the budget are shared: the same snap points.
+    assert kd.limit_exceeded and kd.partial_objects == grid.partial_objects
+    assert np.array_equal(kd.coords, grid.coords) and np.array_equal(kd.is_bounds, grid.is_bounds)
+    # The KD-tree is built while the move starts, not on the first mouse move.
+    assert "kdtree" in kd._cache and "kdtree" not in grid._cache
+    assert ops._runtime_info(kd).endswith("[KD-tree]"), ops._runtime_info(kd)
+    assert "KD-tree" not in ops._runtime_info(grid)
+
+    region, rv3d = _perspective_view((14.0, -25.0, 12.0), (14.0, 0.0, 0.0))
+    import random
+    rnd = random.Random(3)
+    hits = 0
+    for _ in range(40):
+        current = Vector(kd.coords[rnd.randrange(kd.point_count)]) + Vector(
+            (rnd.uniform(-0.2, 0.2), rnd.uniform(-0.2, 0.2), rnd.uniform(-0.2, 0.2)))
+        mouse = utils.world_to_screen(region, rv3d, current)
+        found = [detector.find_candidates(b, current, region, rv3d, mouse, 30, 15.0, max_results=10 ** 9)
+                 for b in (grid, kd)]
+        assert _candidate_keys(found[0]) == _candidate_keys(found[1])
+        hits += bool(found[0])
+    assert hits > 20, hits
+
+
+def case_kdtree_edit_mode_excludes_moving():
+    _clear_scene()
+    obj = _create_grid_object("KE_Grid", (0.0, 0.0, 0.0), 12, 12)
+    _select_only(obj)
+    bpy.context.scene.smartclip_target_scope = "SELF"
+    moving = {0, 1, 2, 13, 14}
+    starts = [obj.matrix_world @ obj.data.vertices[i].co for i in sorted(moving)]
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        builds = []
+        for backend in utils.SEARCH_BACKENDS:
+            with _temporary_budget(100000, backend):
+                builds.append(detector.build_spatial_tree(bpy.context, active_obj=obj,
+                                                          moving_verts={obj: moving}))
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    grid, kd = builds
+    assert kd.point_count == 144 - len(moving), kd.point_count
+    region, rv3d = _perspective_view((0.0, -8.0, 6.0), (0.0, 0.0, 0.0))
+    for start in starts:
+        mouse = utils.world_to_screen(region, rv3d, start)
+        # (grid spacing is about 85 px on screen here)
+        found = [detector.find_candidates(b, start, region, rv3d, mouse, 200, 5.0, max_results=10 ** 9)
+                 for b in (grid, kd)]
+        assert _candidate_keys(found[0]) == _candidate_keys(found[1])
+        assert found[1], "no other vertex found near a moving one"
+        # A moving vertex never snaps to where it (or another moving one) started.
+        assert all((c.location - s).length > 1e-6 for c in found[1] for s in starts)
+
+
 CASES = {
     "scene_props": case_scene_properties_registered,
     "scope_self": case_scope_self,
@@ -1247,6 +1534,11 @@ CASES = {
     "non_finite_vertices_dropped": case_non_finite_vertices_dropped,
     "execute_skips_non_editable": case_execute_skips_non_editable_objects,
     "navigation_binding_rules": case_navigation_binding_rules,
+    "backends_match_views": case_backends_match_across_views,
+    "backends_match_edge_cases": case_backends_match_edge_cases,
+    "kdtree_cone_rim": case_kdtree_cone_rim,
+    "search_backend_setting": case_search_backend_setting,
+    "kdtree_edit_mode_excludes_moving": case_kdtree_edit_mode_excludes_moving,
 }
 
 

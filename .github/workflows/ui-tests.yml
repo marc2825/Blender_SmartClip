@@ -11,13 +11,21 @@ on:
         required: false
         default: '["4.0.2", "5.2.4"]'
         type: string
+      backend:
+        description: "Snap search backend (Advanced Settings > Snap Search)"
+        required: false
+        default: GRID
+        type: choice
+        options:
+          - GRID
+          - KDTREE
 
 permissions:
   contents: read
 
 jobs:
   ui-tests:
-    name: ui-tests (Blender ${{ matrix.blender }})
+    name: ui-tests (Blender ${{ matrix.blender }}, ${{ inputs.backend || 'GRID' }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -57,6 +65,7 @@ jobs:
           SMARTCLIP_UI_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
           # software OpenGL redraws slowly; give events time to be processed
           SMARTCLIP_UI_STEP: "0.8"
+          SMARTCLIP_UI_BACKEND: ${{ inputs.backend || 'GRID' }}
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           set -euxo pipefail

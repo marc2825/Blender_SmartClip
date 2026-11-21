@@ -7,8 +7,10 @@ Usage:
   blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
 
 Set SMARTCLIP_UI_SCREENSHOT_DIR to save screenshots of the overlays
-(constraint.png, hard_snap.png) for visual inspection, and SMARTCLIP_UI_STEP
-to wait longer between simulated events on slow (software) OpenGL.
+(constraint.png, hard_snap.png) for visual inspection, SMARTCLIP_UI_STEP
+to wait longer between simulated events on slow (software) OpenGL, and
+SMARTCLIP_UI_BACKEND=KDTREE to run the checks with the experimental KD-tree
+snap search instead of the default screen-space grid.
 
 Exit code 0 = all checks passed, 1 = failures.
 """
@@ -17,6 +19,7 @@ import io
 import os
 import sys
 import traceback
+from types import SimpleNamespace
 
 import bmesh
 import bpy
@@ -32,6 +35,8 @@ import smart_clipping  # noqa: E402
 # Seconds between simulated events.  Software OpenGL on a virtual display
 # redraws slowly, so CI sets SMARTCLIP_UI_STEP higher.
 STEP = float(os.environ.get("SMARTCLIP_UI_STEP", "0.15"))
+# Snap search backend (smart_clipping.utils.SEARCH_BACKENDS); empty = default.
+BACKEND = os.environ.get("SMARTCLIP_UI_BACKEND", "").strip().upper()
 
 _results = []
 _TEE = None
@@ -113,7 +118,7 @@ def _steps():
     win, area, region, rv3d = _view3d()
     print(f"[ui:test] Blender {bpy.app.version_string}, window {win.width}x{win.height}, "
           f"3D view region {region.width}x{region.height} at ({region.x}, {region.y}), "
-          f"step {STEP}s", flush=True)
+          f"step {STEP}s, search {BACKEND or 'default'}", flush=True)
     scene = bpy.context.scene
     scene.smartclip_enabled = True
     scene.smartclip_target_scope = "SELF"  # Object Mode + SELF = no snap targets
@@ -429,6 +434,9 @@ def _steps():
     vertex = target.matrix_world @ target.data.vertices[0].co
     to_vertex = px(vertex) - px(start_world)
     yield from start_modal("hard_snap")
+    check("hard_snap:search_backend",
+          ("[KD-tree]" in scene.smartclip_runtime_info) == (BACKEND == "KDTREE"),
+          repr(scene.smartclip_runtime_info))
     ev("MOUSEMOVE", "NOTHING", dx=round(to_vertex.x), dy=round(to_vertex.y))
     yield STEP
     ev("RIGHTMOUSE", "PRESS")
@@ -539,6 +547,15 @@ def main():
     sys.stderr = tee
     if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
         smart_clipping.register()
+    if BACKEND:
+        # Registered by path, the add-on has no stored preferences: hand the
+        # snap point collection the requested backend directly.
+        if BACKEND not in smart_clipping.utils.SEARCH_BACKENDS:
+            raise SystemExit(f"SMARTCLIP_UI_BACKEND must be one of "
+                             f"{smart_clipping.utils.SEARCH_BACKENDS}, not {BACKEND!r}")
+        prefs = SimpleNamespace(max_vertex_budget=smart_clipping.utils.DEFAULT_VERTEX_BUDGET,
+                                search_backend=BACKEND)
+        smart_clipping.detector.get_addon_prefs = lambda _ctx: prefs
     bpy.utils.register_class(SMARTCLIP_TEST_OT_probe)
     # Added in the same tick as the add-on's items so both are merged into the
     # user keymap together; head=True places it right after Smart Clipping's.
