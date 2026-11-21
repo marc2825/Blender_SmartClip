@@ -2,8 +2,8 @@
 
 Lifecycle
 ---------
-invoke  -- gather what moves, build KD-Tree, register draw handlers.
-modal   -- process mouse / keyboard, query tree, apply snap, redraw.
+invoke  -- gather what moves, collect the snap points, register draw handlers.
+modal   -- process mouse / keyboard, search snap candidates, apply snap, redraw.
 finish  -- remove draw handlers, store the final offset for redo.
 cancel  -- called by Blender when the modal is aborted externally
            (file load, window close): restore and clean up.
@@ -21,6 +21,7 @@ from . import detector, drawing
 from .prefs import get_addon_prefs
 from .utils import (
     DEFAULT_SNAP_DISTANCE_PX,
+    SEARCH_KDTREE,
     apply_constraint,
     clamp01,
     constraint_axes,
@@ -30,9 +31,11 @@ from .utils import (
     world_to_screen,
 )
 
-# The KD-Tree search radius covers half the viewport at the depth of the
-# moving point, so it follows the view scale.  The screen-pixel filter
-# (snap_distance_px) is the real gatekeeper; the radius only pre-filters.
+# The 3D search radius covers half the viewport at the depth of the moving
+# point, so it follows the view scale.  The screen-pixel filter
+# (snap_distance_px) decides; the radius only keeps distant points that
+# happen to line up on screen out (and bounds the depth the KD-tree search
+# looks at).
 QUERY_RADIUS_VIEWPORT_FRACTION = 0.5
 
 # Soft-snap pull strength at zero screen distance.
@@ -374,7 +377,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         )
         self._view_matrix = self._rv3d.perspective_matrix.copy()
 
-        # Build spatial index (heavy work happens here, once).  Moving
+        # Collect the snap points (heavy work happens here, once).  Moving
         # geometry is excluded so it can never snap to itself.
         if self._is_edit:
             self._build = detector.build_spatial_tree(
@@ -691,15 +694,17 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 def _runtime_info(build) -> str:
     if build is None:
         return ""
+    # The experimental search method is named so it is clear which one ran.
+    method = " [KD-tree]" if build.backend == SEARCH_KDTREE else ""
     if not build.limit_exceeded:
-        return f"Vertices in tree: {build.source_vertex_count}"
+        return f"Snap points: {build.source_vertex_count}{method}"
     info = (
         f"Budget exceeded: {build.point_count} points "
         f"(sampled: {len(build.partial_objects)}, box only: {len(build.bounds_objects)}"
     )
     if build.skipped_objects:
         info += f", skipped: {len(build.skipped_objects)}"
-    return info + ")"
+    return info + ")" + method
 
 
 def _resolve_region(context):

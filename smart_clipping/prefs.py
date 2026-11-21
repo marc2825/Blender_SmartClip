@@ -1,8 +1,23 @@
 import bpy
-from bpy.props import BoolProperty, FloatVectorProperty, IntProperty
+from bpy.props import BoolProperty, EnumProperty, FloatVectorProperty, IntProperty
 from bpy.types import AddonPreferences
 
-from .utils import DEFAULT_SNAP_DISTANCE_PX, DEFAULT_VERTEX_BUDGET
+from .utils import (
+    DEFAULT_SEARCH_BACKEND,
+    DEFAULT_SNAP_DISTANCE_PX,
+    DEFAULT_VERTEX_BUDGET,
+    SEARCH_GRID,
+    SEARCH_KDTREE,
+)
+
+_SEARCH_BACKEND_ITEMS = [
+    (SEARCH_GRID, "Screen-space Grid",
+     "Sort the snap points into a grid on screen, redone when the view changes (default)"),
+    (SEARCH_KDTREE, "3D KD-tree (Experimental)",
+     "Narrow the snap points down in 3D with a KD-tree built when the move starts, "
+     "then check their distance on screen. Usually slower than the grid, and much slower "
+     "when many snap points crowd around the moving point"),
+]
 
 ADDON_MODULE_NAME = __package__
 
@@ -34,6 +49,16 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
         default=DEFAULT_VERTEX_BUDGET,
         min=100,
         max=10_000_000,
+    )
+
+    search_backend: EnumProperty(
+        name="Snap Search",
+        description=(
+            "How snap candidates are looked up during a move. Both methods find the same "
+            "candidates; only the speed differs"
+        ),
+        items=_SEARCH_BACKEND_ITEMS,
+        default=DEFAULT_SEARCH_BACKEND,
     )
 
     hotkeys_enabled: BoolProperty(
@@ -68,6 +93,11 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
         col.separator()
         col.prop(self, "color_guide")
         col.prop(self, "color_snap")
+
+        layout.separator()
+        box = layout.box()
+        box.label(text="Advanced Settings")
+        box.prop(self, "search_backend")
 
         layout.separator()
         box = layout.box()

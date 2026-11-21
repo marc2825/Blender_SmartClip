@@ -14,23 +14,44 @@ budget for later objects; those get the nine stand-in points (or their own
 vertices when they have no more than nine) while the budget lasts, and the
 rest are skipped.
 
-Candidate search runs in screen space.  All points are projected once per
-view and binned into cells the size of the snap threshold; a query reads the
-cells around the moving point and checks those points exactly, so no point
-within the threshold is missed however crowded the scene is.  Projections are
-redone only when the view changes.
+Candidates are decided in screen space: a point qualifies when its projection
+lies within the snap threshold of the moving point (and within the 3D search
+radius).  Two interchangeable backends (Advanced Settings > Snap Search) find
+the points to check; both check them exactly, so they return the same
+candidates in the same order:
+
+- ``GRID`` (default): all points are projected once per view and binned into
+  cells the size of the snap threshold; a query reads the cells around the
+  moving point.  Projections are redone only when the view changes.
+- ``KDTREE`` (experimental): a ``mathutils.kdtree.KDTree`` is built once per
+  move, independent of the view.  The points that can project inside the
+  snap disk form a cone from the viewpoint (a cylinder in orthographic
+  views); a query covers the part of it within the depth range of the 3D
+  search radius with a chain of spheres, collects the points in them, and
+  projects only those.  A plain range query around the moving point would
+  not narrow anything: the search radius spans half the screen.  The tree
+  stores single-precision coordinates, so the spheres are slightly enlarged
+  and the exact tests follow.  The tree is only a pre-filter: the point
+  nearest in 3D is often not the one nearest on screen.
+
+Axis Align (``find_axis_candidates``) uses per-axis sorted values with either
+backend.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import List
 
 import numpy as np
-from mathutils import Vector
+from mathutils import Vector, kdtree
 
 from .prefs import get_addon_prefs
 from .utils import (
+    DEFAULT_SEARCH_BACKEND,
     DEFAULT_SNAP_DISTANCE_PX,
     DEFAULT_VERTEX_BUDGET,
+    SEARCH_BACKENDS,
+    SEARCH_KDTREE,
     object_center_world,
     world_to_screen,
 )
@@ -53,6 +74,19 @@ VIEW_PARALLEL_LIMIT = 0.98
 # Fixed seed so down-sampling is reproducible.
 _SAMPLE_SEED = 0x5C11
 _CELL_LIMIT = 2 ** 30
+# The KD-tree keeps float32 coordinates.  Its range query is widened by these
+# (relative to the radius, and to the coordinate magnitude, which bounds the
+# rounding of the stored and queried points) so it never drops a point that is
+# within the radius in float64; the exact test follows.
+_KD_RADIUS_REL_PAD = 1e-5
+_KD_COORD_REL_PAD = 1e-6
+# Points converted to Python lists at a time while filling the KD-tree.
+_KD_INSERT_CHUNK = 65_536
+# Spheres (KD-tree range queries) covering the cone of sight per query.
+_KD_MAX_SPHERES = 64
+# Views whose matrix is worse conditioned than this are searched without
+# narrowing (the cone could be off by more than the padding).
+_KD_MAX_CONDITION = 1e10
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +103,9 @@ class SnapCandidate:
 
     Lists of candidates are ordered best first: by screen distance, with
     candidates within ``SCREEN_TIE_PX`` of each other ordered by distance in
-    3D (to the moving point, or along the axis for ALIGN_*).
+    3D (to the moving point, or along the axis for ALIGN_*).  POINT / BOUNDS
+    candidates that tie on both (coincident points) keep the order in which
+    they were collected.
     """
     type: str
     location: Vector     # world-space snap destination
@@ -109,6 +145,8 @@ class BuildResult:
     # Point indices that must never be returned (for callers that register
     # points they want to keep out of the results)
     exclude_indices: set = field(default_factory=set)
+    # Candidate search method: one of utils.SEARCH_BACKENDS
+    backend: str = DEFAULT_SEARCH_BACKEND
     _cache: dict = field(default_factory=dict, repr=False)
 
     @property
@@ -125,12 +163,25 @@ class BuildResult:
                 for o, b in zip(self.obj_index.tolist(), self.is_bounds.tolist())]
 
 
-def build_from_points(coords, names=None, exclude=()) -> BuildResult:
+def _check_backend(backend) -> str:
+    if backend not in SEARCH_BACKENDS:
+        raise ValueError(f"unknown search backend {backend!r}; expected one of {SEARCH_BACKENDS}")
+    return backend
+
+
+def _backend_from_prefs(prefs) -> str:
+    backend = getattr(prefs, "search_backend", None) if prefs else None
+    return backend if backend in SEARCH_BACKENDS else DEFAULT_SEARCH_BACKEND
+
+
+def build_from_points(coords, names=None, exclude=(),
+                      backend=DEFAULT_SEARCH_BACKEND) -> BuildResult:
     """Build a BuildResult from raw world coordinates (tools and tests).
 
     *names*: one object name per point; ``None`` puts all points under
-    ``"Points"``.
+    ``"Points"``.  The search index is built lazily (see prepare_search).
     """
+    _check_backend(backend)
     coords = np.asarray(coords, dtype=np.float64).reshape(-1, 3)
     if names is None:
         obj_names = ["Points"]
@@ -146,6 +197,7 @@ def build_from_points(coords, names=None, exclude=()) -> BuildResult:
         obj_names=obj_names,
         source_vertex_count=len(coords),
         exclude_indices=set(exclude),
+        backend=backend,
     )
 
 
@@ -259,10 +311,20 @@ def build_spatial_tree(context, active_obj=None, moving_verts=None,
     and their descendants move as a whole, so they are left out entirely.
 
     *view*: optional ``(region, rv3d)``; objects in view are taken first.
+
+    The search backend comes from the add-on preferences; its view-independent
+    index (the KD-tree) is built here, as part of starting the move.
     """
+    result = _collect_snap_points(context, active_obj, moving_verts, exclude_objects, view)
+    prepare_search(result)
+    return result
+
+
+def _collect_snap_points(context, active_obj, moving_verts, exclude_objects, view) -> BuildResult:
     active_obj = active_obj or context.active_object
     prefs = get_addon_prefs(context)
     budget = max(0, prefs.max_vertex_budget if prefs else DEFAULT_VERTEX_BUDGET)
+    backend = _backend_from_prefs(prefs)
 
     candidates = _collect_scope_objects(context, active_obj)
     moving_by_data = {}
@@ -280,7 +342,7 @@ def build_spatial_tree(context, active_obj=None, moving_verts=None,
         for obj, idx in moving_verts.items():
             moving_by_data.setdefault(obj.data.as_pointer(), set()).update(idx)
     if not candidates:
-        return BuildResult()
+        return BuildResult(backend=backend)
 
     _sync_edit_meshes(candidates)
     depsgraph = context.evaluated_depsgraph_get()
@@ -363,7 +425,8 @@ def build_spatial_tree(context, active_obj=None, moving_verts=None,
                 source.to_mesh_clear()
 
     if not chunks:
-        return BuildResult(limit_exceeded=over_budget, skipped_objects=skipped_objects)
+        return BuildResult(limit_exceeded=over_budget, skipped_objects=skipped_objects,
+                           backend=backend)
     return BuildResult(
         coords=np.concatenate(chunks),
         obj_index=np.concatenate(chunk_obj),
@@ -374,7 +437,19 @@ def build_spatial_tree(context, active_obj=None, moving_verts=None,
         bounds_objects=bounds_objects,
         partial_objects=partial_objects,
         skipped_objects=skipped_objects,
+        backend=backend,
     )
+
+
+def prepare_search(build: BuildResult) -> None:
+    """Build the view-independent search index of *build* now.
+
+    Only the KD-tree has one; the screen grid depends on the view and is
+    built by the first query in each view.  Queries build a missing index
+    themselves, so calling this is optional.
+    """
+    if build is not None and build.backend == SEARCH_KDTREE and build.point_count:
+        _kdtree_index(build)
 
 
 # ---------------------------------------------------------------------------
@@ -393,29 +468,53 @@ def _exclude_mask(build):
     return mask
 
 
+def _perspective(rv3d) -> np.ndarray:
+    return np.array(rv3d.perspective_matrix, dtype=np.float64)
+
+
+def _project(coords, pm, width, height):
+    """Project *coords* (N, 3) to region pixels with perspective matrix *pm*.
+
+    Returns ``(ok, sx, sy)``: the row indices of the points that project (in
+    front of the viewer and finite, as in location_3d_to_region_2d) and their
+    pixel coordinates.  Only element-wise arithmetic is used, so a point gets
+    bit-identical values whichever rows it is projected with; this is what
+    lets both search backends rank candidates identically.
+    """
+    x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
+    with np.errstate(invalid="ignore", over="ignore"):
+        w = x * pm[3, 0] + y * pm[3, 1] + z * pm[3, 2] + pm[3, 3]
+        ok = np.flatnonzero(np.isfinite(w) & (w > 0.0) & np.isfinite(coords).all(axis=1))
+        x, y, z, w = x[ok], y[ok], z[ok], w[ok]
+        hx = x * pm[0, 0] + y * pm[0, 1] + z * pm[0, 2] + pm[0, 3]
+        hy = x * pm[1, 0] + y * pm[1, 1] + z * pm[1, 2] + pm[1, 3]
+        sx = width / 2.0 * (1.0 + hx / w)
+        sy = height / 2.0 * (1.0 + hy / w)
+    finite = np.isfinite(sx) & np.isfinite(sy)
+    if not finite.all():
+        ok, sx, sy = ok[finite], sx[finite], sy[finite]
+    return ok, sx, sy
+
+
+def _distances(coords, co) -> np.ndarray:
+    """Euclidean distances from *co* (float64 (3,)) to each row of *coords*."""
+    with np.errstate(invalid="ignore", over="ignore"):
+        d = coords - co
+        return np.sqrt(d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1] + d[:, 2] * d[:, 2])
+
+
 def _screen_index(build, region, rv3d, cell_px):
     """Project every point for this view and bin it into screen cells.
 
     Cached on *build* until the view, region size, or cell size changes.
     """
-    pm = np.array(rv3d.perspective_matrix, dtype=np.float64)
+    pm = _perspective(rv3d)
     key = (pm.tobytes(), int(region.width), int(region.height), float(cell_px))
     cached = build._cache.get("screen")
     if cached is not None and cached[0] == key:
         return cached[1]
 
-    coords = build.coords
-    with np.errstate(invalid="ignore", over="ignore"):
-        w = coords @ pm[3, :3] + pm[3, 3]
-        # same rule as location_3d_to_region_2d; non-finite points never match
-        front = np.flatnonzero(np.isfinite(w) & (w > 0.0) & np.isfinite(coords).all(axis=1))
-        hom = coords[front] @ pm[:2, :3].T + pm[:2, 3]
-        wf = w[front]
-        sx = region.width / 2.0 * (1.0 + hom[:, 0] / wf)
-        sy = region.height / 2.0 * (1.0 + hom[:, 1] / wf)
-    finite = np.isfinite(sx) & np.isfinite(sy)
-    if not finite.all():
-        front, sx, sy = front[finite], sx[finite], sy[finite]
+    front, sx, sy = _project(build.coords, pm, float(region.width), float(region.height))
     cx = np.clip(np.floor(sx / cell_px), -_CELL_LIMIT, _CELL_LIMIT).astype(np.int64)
     cy = np.clip(np.floor(sy / cell_px), -_CELL_LIMIT, _CELL_LIMIT).astype(np.int64)
     keys = (cx + _CELL_LIMIT) * (2 * _CELL_LIMIT + 1) + (cy + _CELL_LIMIT)
@@ -437,9 +536,209 @@ def _cell_key(cx, cy):
     return (cx + _CELL_LIMIT) * (2 * _CELL_LIMIT + 1) + (cy + _CELL_LIMIT)
 
 
-def _rank(screen_dist, tie_break):
-    """Indices ordering candidates best first (see SnapCandidate)."""
-    return np.lexsort((tie_break, np.floor(screen_dist / SCREEN_TIE_PX)))
+def _rank(screen_dist, tie_break, last=None):
+    """Indices ordering candidates best first (see SnapCandidate).
+
+    *last* (e.g. point indices) decides what is still tied, so the order
+    does not depend on the order the candidates were gathered in.
+    """
+    keys = (tie_break, np.floor(screen_dist / SCREEN_TIE_PX))
+    return np.lexsort(keys if last is None else (last,) + keys)
+
+
+def _grid_hits(build, region, rv3d, mouse_xy, thr):
+    """Points within *thr* px of *mouse_xy* on screen, via the screen grid."""
+    index = _screen_index(build, region, rv3d, max(thr, 1.0))
+    keys = index["keys"]
+    if len(keys) == 0:
+        return None
+    mx, my = float(mouse_xy[0]), float(mouse_xy[1])
+    cell = index["cell"]
+    cx0, cx1 = int(np.floor((mx - thr) / cell)), int(np.floor((mx + thr) / cell))
+    cy0, cy1 = int(np.floor((my - thr) / cell)), int(np.floor((my + thr) / cell))
+    slices = []
+    for cx in range(cx0, cx1 + 1):
+        lo = np.searchsorted(keys, _cell_key(cx, cy0), side="left")
+        hi = np.searchsorted(keys, _cell_key(cx, cy1), side="right")
+        if hi > lo:
+            slices.append(np.arange(lo, hi))
+    if not slices:
+        return None
+    sel = np.concatenate(slices)
+    d_screen = np.hypot(index["sx"][sel] - mx, index["sy"][sel] - my)
+    keep = d_screen <= thr
+    return index["points"][sel][keep], d_screen[keep]
+
+
+def _kdtree_index(build):
+    """KD-tree over the finite points of *build* (cached)."""
+    cached = build._cache.get("kdtree")
+    if cached is not None and cached["count"] == build.point_count:
+        return cached
+    coords = build.coords
+    finite = np.flatnonzero(np.isfinite(coords).all(axis=1))
+    tree = kdtree.KDTree(len(finite))
+    insert = tree.insert
+    for start in range(0, len(finite), _KD_INSERT_CHUNK):
+        part = finite[start:start + _KD_INSERT_CHUNK]
+        for i, co in zip(part.tolist(), coords[part].tolist()):
+            insert(co, i)
+    tree.balance()
+    pts = coords[finite]
+    cached = {
+        "count": build.point_count,
+        "tree": tree,
+        "finite": finite,
+        "extent": float(np.abs(pts).max()) if len(finite) else 0.0,
+        # bounding box, rows min / max
+        "box": np.array([pts.min(axis=0), pts.max(axis=0)]) if len(finite) else np.zeros((2, 3)),
+    }
+    build._cache["kdtree"] = cached
+    return cached
+
+
+def _sight_cone(pm, width, height, mouse_xy, thr):
+    """The points that project within *thr* px of *mouse_xy*, as a cone.
+
+    Returns ``(depth_row, c0, d, spread0, spread1)``, or ``None`` when no point
+    can project.  The depth of a point p is ``s = depth_row . (p, 1)`` (clip w
+    in perspective, clip z in orthographic views).  Among the points at depth
+    s, those projecting inside the disk lie within ``spread0 + spread1 * s``
+    of ``c0 + d * s``: at a fixed depth the screen-to-world mapping is affine,
+    so the disk maps to an ellipse whose semi-axes bound that distance.
+    Raises LinAlgError for a degenerate matrix.
+    """
+    xn = 2.0 * float(mouse_xy[0]) / width - 1.0
+    yn = 2.0 * float(mouse_xy[1]) / height - 1.0
+    tx, ty = 2.0 * thr / width, 2.0 * thr / height
+    perspective = np.abs(pm[3, :3]).max() > 0.0
+    rows = [0, 1, 3] if perspective else [0, 1, 2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        condition = np.linalg.cond(pm[rows, :3])
+    if not condition <= _KD_MAX_CONDITION:
+        raise np.linalg.LinAlgError("view matrix too close to singular")
+    if perspective:
+        # x_ndc * w = row0 . (p, 1), y likewise, w = row3 . (p, 1)
+        qi = np.linalg.inv(pm[rows, :3])
+        c0 = qi @ -pm[rows, 3]
+        d = qi @ np.array((xn, yn, 1.0))
+        spread0 = 0.0
+        spread1 = math.hypot(np.linalg.norm(qi[:, 0]) * tx, np.linalg.norm(qi[:, 1]) * ty)
+        return pm[3], c0, d, spread0, spread1
+    w = pm[3, 3]                       # orthographic: w is the same everywhere
+    if not w > 0.0:
+        return None
+    qi = np.linalg.inv(pm[rows, :3])
+    c0 = qi @ np.array((xn * w - pm[0, 3], yn * w - pm[1, 3], -pm[2, 3]))
+    d = qi[:, 2].copy()
+    spread0 = math.hypot(np.linalg.norm(qi[:, 0]) * tx * w, np.linalg.norm(qi[:, 1]) * ty * w)
+    return pm[2], c0, d, spread0, 0.0
+
+
+def _depth_bounds(lo, hi, d_len, spread0, spread1):
+    """Split the depth range [lo, hi] so each piece's covering sphere stays small.
+
+    A piece is about as long as the cone is wide there, so the spheres hold a
+    few times the points of the cone itself; at most ``_KD_MAX_SPHERES``
+    pieces (the one nearest to the apex absorbs the rest).
+    """
+    if spread1 > 0.0:                  # perspective: the cone widens with depth
+        growth = math.log1p(2.0 * spread1 / d_len)
+        if not growth > 0.0:
+            return np.array((lo, hi))
+        first = hi * math.exp(-(_KD_MAX_SPHERES - 1) * growth)
+        if first > 0.0 and lo < first:
+            return np.concatenate(([lo], np.geomspace(first, hi, _KD_MAX_SPHERES)))
+        if lo > 0.0:
+            pieces = max(1, math.ceil(math.log(hi / lo) / growth))
+            return np.geomspace(lo, hi, pieces + 1)
+        return np.array((lo, hi))
+    pieces = min(_KD_MAX_SPHERES, max(1, math.ceil(d_len * (hi - lo) / (2.0 * spread0))))
+    return np.linspace(lo, hi, pieces + 1)
+
+
+def _kdtree_range(build, current_co, query_radius, region, rv3d, mouse_xy, thr):
+    """Indices of the points that may be candidates (a superset).
+
+    A candidate projects within *thr* px of *mouse_xy* and lies within
+    *query_radius* of *current_co*: it is inside the cone of sight through
+    the snap disk (_sight_cone), at a depth the search ball and the points'
+    bounding box allow.  That part of the cone is covered by a chain of
+    spheres, each searched with the KD-tree.  The radii are widened for the
+    tree's float32 coordinates; the caller applies the exact tests.
+    """
+    index = _kdtree_index(build)
+    finite = index["finite"]
+    if len(finite) == 0:
+        return finite
+    cur = np.array([float(c) for c in current_co], dtype=np.float64)
+    radius = math.inf if query_radius is None else float(query_radius)
+    if math.isnan(radius) or radius < 0.0 or (not math.isinf(radius) and not np.isfinite(cur).all()):
+        return finite[:0]              # nothing passes the exact tests either
+    pm = _perspective(rv3d)
+    try:
+        cone = _sight_cone(pm, float(region.width), float(region.height), mouse_xy,
+                           max(thr, 0.5) * (1.0 + 1e-6))
+    except np.linalg.LinAlgError:
+        return finite                  # degenerate view: no narrowing
+    if cone is None:
+        return finite[:0]
+    depth_row, c0, d, spread0, spread1 = cone
+    d_len = float(np.linalg.norm(d))
+    if not (np.isfinite(c0).all() and math.isfinite(d_len) and d_len > 0.0
+            and math.isfinite(spread0 + spread1)):
+        return finite
+
+    # Depth range: the bounding box of the points, the ball, in front (w > 0).
+    corners = np.array([[x, y, z] for x in index["box"][:, 0]
+                        for y in index["box"][:, 1] for z in index["box"][:, 2]])
+    box_depth = corners @ depth_row[:3] + depth_row[3]
+    lo, hi = float(box_depth.min()), float(box_depth.max())
+    if not math.isinf(radius):
+        mid = float(cur @ depth_row[:3] + depth_row[3])
+        reach = radius * float(np.linalg.norm(depth_row[:3]))
+        lo, hi = max(lo, mid - reach), min(hi, mid + reach)
+    pad = 1e-6 * (abs(lo) + abs(hi)) + 1e-12
+    lo, hi = lo - pad, hi + pad
+    if spread1 > 0.0:
+        lo = max(lo, 0.0)
+    if not (math.isfinite(lo) and math.isfinite(hi)):
+        return finite
+    if hi < lo:
+        return finite[:0]
+
+    bounds = _depth_bounds(lo, hi, d_len, spread0, spread1)
+    a, b = bounds[:-1], bounds[1:]
+    centers = c0 + np.outer((a + b) / 2.0, d)
+    radii = d_len * (b - a) / 2.0 + spread0 + spread1 * np.maximum(np.abs(a), np.abs(b))
+    if not math.isinf(radius):
+        near = np.linalg.norm(centers - cur, axis=1) <= radii + radius * (1.0 + 1e-6)
+        centers, radii = centers[near], radii[near]
+    radii = (radii * (1.0 + _KD_RADIUS_REL_PAD)
+             + _KD_COORD_REL_PAD * (index["extent"] + np.abs(centers).max(axis=1, initial=0.0)))
+    if not np.all(radii < 1e30):       # beyond float32 range: no narrowing
+        return finite
+    find_range = index["tree"].find_range
+    found = []
+    for center, r in zip(centers.tolist(), radii.tolist()):
+        hits = find_range(center, r)
+        if hits:
+            found.append(np.fromiter((hit[1] for hit in hits), dtype=np.intp, count=len(hits)))
+    if not found:
+        return finite[:0]
+    return np.unique(np.concatenate(found))
+
+
+def _kdtree_hits(build, current_co, region, rv3d, mouse_xy, thr, query_radius):
+    """Points within *thr* px of *mouse_xy*, narrowed down by the KD-tree."""
+    idx = _kdtree_range(build, current_co, query_radius, region, rv3d, mouse_xy, thr)
+    if len(idx) == 0:
+        return None
+    ok, sx, sy = _project(build.coords[idx], _perspective(rv3d),
+                          float(region.width), float(region.height))
+    d_screen = np.hypot(sx - float(mouse_xy[0]), sy - float(mouse_xy[1]))
+    keep = d_screen <= thr
+    return idx[ok][keep], d_screen[keep]
 
 
 # ---------------------------------------------------------------------------
@@ -455,6 +754,7 @@ def find_candidates(
     snap_distance_px: int = DEFAULT_SNAP_DISTANCE_PX,
     query_radius: "float | None" = None,
     max_results: int = MAX_RESULTS,
+    backend: "str | None" = None,
 ) -> List[SnapCandidate]:
     """Return the snap candidates around *current_co*, best first.
 
@@ -463,32 +763,21 @@ def find_candidates(
     *query_radius* world units of *current_co* (``None`` = any distance), and
     not in ``build_result.exclude_indices``.  All such points are ranked; the
     best *max_results* are returned.
+
+    *backend* overrides ``build_result.backend``; the result is the same
+    either way, only the work done to find it differs.
     """
     if build_result is None or build_result.point_count == 0:
         return []
+    backend = _check_backend(backend or build_result.backend)
     thr = float(snap_distance_px)
-    index = _screen_index(build_result, region, rv3d, max(thr, 1.0))
-    keys = index["keys"]
-    if len(keys) == 0:
+    if backend == SEARCH_KDTREE:
+        hits = _kdtree_hits(build_result, current_co, region, rv3d, mouse_xy, thr, query_radius)
+    else:
+        hits = _grid_hits(build_result, region, rv3d, mouse_xy, thr)
+    if hits is None:
         return []
-
-    mx, my = float(mouse_xy[0]), float(mouse_xy[1])
-    cell = index["cell"]
-    cx0, cx1 = int(np.floor((mx - thr) / cell)), int(np.floor((mx + thr) / cell))
-    cy0, cy1 = int(np.floor((my - thr) / cell)), int(np.floor((my + thr) / cell))
-    slices = []
-    for cx in range(cx0, cx1 + 1):
-        lo = np.searchsorted(keys, _cell_key(cx, cy0), side="left")
-        hi = np.searchsorted(keys, _cell_key(cx, cy1), side="right")
-        if hi > lo:
-            slices.append(np.arange(lo, hi))
-    if not slices:
-        return []
-    sel = np.concatenate(slices)
-    d_screen = np.hypot(index["sx"][sel] - mx, index["sy"][sel] - my)
-    keep = d_screen <= thr
-    pts = index["points"][sel][keep]
-    d_screen = d_screen[keep]
+    pts, d_screen = hits
 
     exclude = _exclude_mask(build_result)
     if exclude is not None and len(pts):
@@ -497,15 +786,14 @@ def find_candidates(
     if len(pts) == 0:
         return []
     cur = np.array(current_co, dtype=np.float64)
-    with np.errstate(invalid="ignore", over="ignore"):
-        d_world = np.linalg.norm(build_result.coords[pts] - cur, axis=1)
+    d_world = _distances(build_result.coords[pts], cur)
     if query_radius is not None:
         ok = d_world <= query_radius
         pts, d_screen, d_world = pts[ok], d_screen[ok], d_world[ok]
         if len(pts) == 0:
             return []
 
-    order = _rank(d_screen, d_world)[:max_results]
+    order = _rank(d_screen, d_world, pts)[:max_results]
     names = build_result.obj_names
     result = []
     for k in order:

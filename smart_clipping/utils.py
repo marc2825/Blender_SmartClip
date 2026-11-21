@@ -5,6 +5,13 @@ from bpy_extras.view3d_utils import location_3d_to_region_2d, region_2d_to_locat
 DEFAULT_SNAP_DISTANCE_PX = 30
 DEFAULT_VERTEX_BUDGET = 50_000
 
+# Snap candidate search methods (Advanced Settings).  Both return the same
+# candidates; see detector.py.
+SEARCH_GRID = "GRID"
+SEARCH_KDTREE = "KDTREE"
+SEARCH_BACKENDS = (SEARCH_GRID, SEARCH_KDTREE)
+DEFAULT_SEARCH_BACKEND = SEARCH_GRID
+
 _AXIS_INDEX = {"X": 0, "Y": 1, "Z": 2}
 
 

@@ -4,7 +4,7 @@ bl_info = {
     "version": (1, 3, 2),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Smart Clipping",
-    "description": "Move with smart guides: KD-Tree snapping, axis align and constraints",
+    "description": "Move with smart guides: vertex snapping, axis align and constraints",
     "doc_url": "https://github.com/marc2825/Blender_SmartClip",
     "tracker_url": "https://github.com/marc2825/Blender_SmartClip/issues",
     "category": "3D View",
