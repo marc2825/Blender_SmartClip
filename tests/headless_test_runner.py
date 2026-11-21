@@ -1157,6 +1157,55 @@ def case_execute_skips_non_editable_objects():
     assert (linked.matrix_world.translation - before).length < 1e-9
 
 
+def case_navigation_binding_rules():
+    def kmi(idname, key, value="PRESS", active=True, any=False, **mods):
+        fields = {"shift": 0, "ctrl": 0, "alt": 0, "oskey": 0}
+        fields.update(mods)
+        return SimpleNamespace(idname=idname, type=key, value=value, active=active,
+                               any=any, key_modifier="NONE", **fields)
+
+    def event(key, value="PRESS", **mods):
+        fields = {"shift": False, "ctrl": False, "alt": False, "oskey": False}
+        fields.update(mods)
+        return SimpleNamespace(type=key, value=value, **fields)
+
+    mesh = SimpleNamespace(keymap_items=[
+        kmi("mesh.select_more", "NUMPAD_PLUS", ctrl=1),
+        kmi("mesh.unused", "NUMPAD_9", active=False),
+    ])
+    frames = SimpleNamespace(keymap_items=[kmi("screen.frame_offset", "WHEELUPMOUSE", alt=1)])
+    view = SimpleNamespace(keymap_items=[
+        kmi("view3d.zoom", "NUMPAD_PLUS"),
+        kmi("view3d.view_axis", "NUMPAD_7", ctrl=-1),       # any Ctrl state
+        kmi("view3d.object_as_camera", "NUMPAD_0", ctrl=1),
+        kmi("view3d.view_camera", "NUMPAD_0"),
+        kmi("view3d.zoom", "WHEELINMOUSE"),       # zoom is bound to wheel in / out
+        kmi("view3d.rotate", "MIDDLEMOUSE", any=True),
+        kmi("view3d.view_orbit", "NUMPAD_9", value="ANY"),
+    ])
+    keymaps = [mesh, None, frames, view]
+    bind = lambda e: ops.first_binding(keymaps, e)
+
+    # first matching keymap wins: Ctrl+Numpad+ is Select More, not zoom
+    assert bind(event("NUMPAD_PLUS", ctrl=True)) == "mesh.select_more"
+    assert bind(event("NUMPAD_PLUS")) == "view3d.zoom"
+    assert bind(event("NUMPAD_7")) == "view3d.view_axis"
+    assert bind(event("NUMPAD_7", ctrl=True)) == "view3d.view_axis"
+    assert bind(event("NUMPAD_0", ctrl=True)) == "view3d.object_as_camera"
+    assert bind(event("NUMPAD_0")) == "view3d.view_camera"
+    assert bind(event("WHEELUPMOUSE", alt=True)) == "screen.frame_offset"
+    assert bind(event("WHEELUPMOUSE")) == "view3d.zoom"
+    assert bind(event("WHEELDOWNMOUSE")) == "view3d.zoom"
+    assert bind(event("MIDDLEMOUSE", shift=True, ctrl=True)) == "view3d.rotate"
+    assert bind(event("NUMPAD_9")) == "view3d.view_orbit"        # inactive item skipped
+    assert bind(event("NUMPAD_7", value="RELEASE")) is None
+    assert bind(event("NUMPAD_5", shift=True)) is None
+    for name in ("mesh.select_more", "view3d.object_as_camera", "screen.frame_offset"):
+        assert name not in ops._VIEW_OPERATORS
+    for name in ("view3d.zoom", "view3d.view_axis", "view3d.rotate", "view3d.view_camera"):
+        assert name in ops._VIEW_OPERATORS
+
+
 CASES = {
     "scene_props": case_scene_properties_registered,
     "scope_self": case_scope_self,
@@ -1197,6 +1246,7 @@ CASES = {
     "collection_skips_hidden": case_collection_scope_skips_hidden,
     "non_finite_vertices_dropped": case_non_finite_vertices_dropped,
     "execute_skips_non_editable": case_execute_skips_non_editable_objects,
+    "navigation_binding_rules": case_navigation_binding_rules,
 }
 
 

@@ -371,6 +371,54 @@ def _steps():
     ev("ESC", "PRESS")
     yield STEP
     check("numpad_esc_restores", (child.location - start_loc).length < 1e-6)
+
+    # Keys with modifiers pass through only when bound to view navigation:
+    # Ctrl+Numpad7 (bottom view) works, while Ctrl+Numpad0 (Set Active Object
+    # as Camera) and Alt+Wheel (change frame) must not run mid-move.
+    registered = len(bpy.context.window_manager.operators)
+    camera_before = scene.camera
+    frame_before = scene.frame_current
+    yield from start_modal("modified_keys")
+    ev("MOUSEMOVE", "NOTHING", dx=30)
+    yield STEP
+    view_before = rv3d.view_rotation.copy()
+    ev("NUMPAD_7", "PRESS", ctrl=True)
+    ev("NUMPAD_7", "RELEASE", ctrl=True)
+    yield STEP
+    rv3d.update()
+    check("ctrl_numpad_view_passes",
+          view_before.rotation_difference(rv3d.view_rotation).angle > 0.1)
+    distance_before = rv3d.view_distance
+    ev("WHEELUPMOUSE", "PRESS")                    # plain wheel: zoom passes
+    yield STEP
+    check("wheel_zoom_passes", abs(rv3d.view_distance - distance_before) > 1e-4,
+          f"{distance_before:.3f} -> {rv3d.view_distance:.3f}")
+    rotation_before = rv3d.view_rotation.copy()
+    ev("MIDDLEMOUSE", "PRESS", dx=30)              # middle-drag: orbit passes
+    ev("MOUSEMOVE", "NOTHING", dx=110, dy=40)
+    yield STEP
+    ev("MIDDLEMOUSE", "RELEASE", dx=110, dy=40)
+    yield STEP
+    rv3d.update()
+    check("middle_drag_orbit_passes",
+          rotation_before.rotation_difference(rv3d.view_rotation).angle > 0.01)
+    ev("MOUSEMOVE", "NOTHING", dx=30)
+    yield STEP
+    ev("NUMPAD_0", "PRESS", ctrl=True)
+    ev("NUMPAD_0", "RELEASE", ctrl=True)
+    ev("WHEELUPMOUSE", "PRESS", alt=True)
+    yield STEP
+    check("ctrl_numpad0_blocked", scene.camera == camera_before,
+          str(scene.camera.name if scene.camera else None))
+    check("alt_wheel_blocked", scene.frame_current == frame_before,
+          f"{frame_before} -> {scene.frame_current}")
+    ev("ESC", "PRESS")
+    yield STEP
+    check("modified_keys_register_nothing",
+          len(bpy.context.window_manager.operators) == registered)
+    scene.camera = camera_before
+    scene.frame_current = frame_before
+    rv3d.view_distance = 12.0
     rv3d.view_rotation = Euler((1.1, 0.0, 0.6)).to_quaternion()
     rv3d.view_perspective = "PERSP"
     rv3d.update()
@@ -415,6 +463,25 @@ def _steps():
     bm = bmesh.from_edit_mesh(child.data)
     bm.verts.ensure_lookup_table()
     check("edit_mode_esc_restores", (bm.verts[0].co - orig).length < 1e-6)
+
+    # Ctrl+Numpad+ / - are Select More / Less in Edit Mode: not mid-move
+    selected_before = sum(v.select for v in bm.verts)
+    registered = len(bpy.context.window_manager.operators)
+    yield from start_modal("edit_modified_keys")
+    ev("MOUSEMOVE", "NOTHING", dx=20)
+    yield STEP
+    for key in ("NUMPAD_PLUS", "NUMPAD_MINUS", "NUMPAD_PLUS"):
+        ev(key, "PRESS", ctrl=True)
+        ev(key, "RELEASE", ctrl=True)
+    yield STEP
+    ev("ESC", "PRESS")
+    yield STEP
+    bm = bmesh.from_edit_mesh(child.data)
+    bm.verts.ensure_lookup_table()
+    check("ctrl_numpad_select_blocked", sum(v.select for v in bm.verts) == selected_before,
+          f"{selected_before} -> {sum(v.select for v in bm.verts)}")
+    check("edit_modified_keys_register_nothing",
+          len(bpy.context.window_manager.operators) == registered)
     with bpy.context.temp_override(window=win, area=area, region=region):
         bpy.ops.object.mode_set(mode="OBJECT")
     yield STEP

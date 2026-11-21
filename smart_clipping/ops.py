@@ -39,7 +39,9 @@ QUERY_RADIUS_VIEWPORT_FRACTION = 0.5
 SOFT_PULL_POINT = 0.35
 SOFT_PULL_ALIGN = 0.5
 
-# Events handed to Blender so the viewport can be navigated mid-move.
+# Input that can navigate the viewport mid-move.  Such an event is handed to
+# Blender only when the user's keymap binds it to a view operator (below), so
+# e.g. Ctrl+Numpad+ (Select More) or Alt+Wheel (change frame) cannot fire.
 _NAVIGATION_EVENTS = {
     "MIDDLEMOUSE", "WHEELUPMOUSE", "WHEELDOWNMOUSE",
     "TRACKPADPAN", "TRACKPADZOOM", "MOUSEROTATE", "MOUSESMARTZOOM",
@@ -50,6 +52,68 @@ _NAVIGATION_EVENTS = {
     "NUMPAD_PERIOD", "NUMPAD_PLUS", "NUMPAD_MINUS",
     "HOME",
 }
+
+# Operators that only change the view.
+_VIEW_OPERATORS = {
+    "view3d.rotate", "view3d.move", "view3d.zoom", "view3d.dolly",
+    "view3d.view_axis", "view3d.view_orbit", "view3d.view_pan", "view3d.view_roll",
+    "view3d.view_selected", "view3d.view_all", "view3d.view_center_cursor",
+    "view3d.view_center_pick", "view3d.view_persportho", "view3d.view_camera",
+    "view3d.ndof_orbit", "view3d.ndof_orbit_zoom", "view3d.ndof_pan", "view3d.ndof_all",
+}
+
+# Keymaps consulted, in the order the 3D Viewport handles them: the mode's
+# own keymap first, then the shared ones.
+_MODE_KEYMAPS = {"OBJECT": ("Object Mode",), "EDIT_MESH": ("Mesh",)}
+_SHARED_KEYMAPS = ("Object Non-modal", "Frames", "3D View Generic", "3D View")
+
+
+def _modifiers_match(kmi, event) -> bool:
+    if getattr(kmi, "any", False):
+        return True
+    for mod in ("shift", "ctrl", "alt", "oskey", "hyper"):
+        want = getattr(kmi, mod, 0)
+        if want == -1:                       # "any state" for this modifier
+            continue
+        if bool(want) != bool(getattr(event, mod, False)):
+            return False
+    return True
+
+
+# Keymaps bind wheel zoom to the "in" / "out" directions, which Blender maps
+# to wheel up / down depending on the Invert Zoom preference.
+_EVENT_TYPE_ALIASES = {
+    "WHEELUPMOUSE": ("WHEELUPMOUSE", "WHEELINMOUSE", "WHEELOUTMOUSE"),
+    "WHEELDOWNMOUSE": ("WHEELDOWNMOUSE", "WHEELINMOUSE", "WHEELOUTMOUSE"),
+}
+
+
+def first_binding(keymaps, event):
+    """Operator id of the first active item in *keymaps* that *event* triggers."""
+    types = _EVENT_TYPE_ALIASES.get(event.type, (event.type,))
+    for km in keymaps:
+        if km is None:
+            continue
+        for kmi in km.keymap_items:
+            if not kmi.active or kmi.type not in types:
+                continue
+            if kmi.value not in (event.value, "ANY"):
+                continue
+            if getattr(kmi, "key_modifier", "NONE") not in ("NONE", None):
+                continue
+            if _modifiers_match(kmi, event):
+                return kmi.idname
+    return None
+
+
+def passes_to_navigation(context, event) -> bool:
+    """True when *event* would only navigate the view (see _VIEW_OPERATORS)."""
+    if event.type not in _NAVIGATION_EVENTS:
+        return False
+    keyconfig = context.window_manager.keyconfigs.user
+    names = _MODE_KEYMAPS.get(context.mode, ()) + _SHARED_KEYMAPS
+    keymaps = [keyconfig.keymaps.get(name) for name in names]
+    return first_binding(keymaps, event) in _VIEW_OPERATORS
 
 # Every draw handler currently installed by a running operator.  Kept at
 # module level so unregister() can remove leftovers even if an operator
@@ -366,8 +430,8 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             # Nothing moved: no undo step and no redo panel entry
             return {"FINISHED"} if moved else {"CANCELLED"}
 
-        # Pass through viewport navigation (orbit / pan / zoom)
-        if event.type in _NAVIGATION_EVENTS:
+        # Pass through viewport navigation (orbit / pan / zoom / numpad views)
+        if passes_to_navigation(context, event):
             return {"PASS_THROUGH"}
 
         # Right-click hold = hard snap
@@ -388,8 +452,9 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             self._do_snap(context)
             return {"RUNNING_MODAL"}
 
-        # All remaining events (incl. Ctrl / Shift / Alt) are consumed so
-        # Blender defaults (Ctrl+Z, Ctrl+S, Shift+G …) cannot fire mid-move.
+        # All remaining events (incl. Ctrl / Shift / Alt and navigation keys
+        # bound to something else) are consumed so Blender defaults (Ctrl+Z,
+        # Ctrl+S, Select More …) cannot fire mid-move.
         return {"RUNNING_MODAL"}
 
     # ------------------------------------------------- internal helpers
