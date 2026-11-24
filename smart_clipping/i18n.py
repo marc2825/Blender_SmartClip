@@ -52,10 +52,10 @@ MESSAGES = {
     # Sidebar panel and scene settings
     "Limits and Display": "上限と表示",
     "Enable Smart Clipping": "Smart Clipping を使う",
-    "Use Smart Clipping in this scene. When off, Shift+G does Blender's Select Grouped "
-    "or Select Similar":
-        "このシーンで Smart Clipping を使います。オフのときは、Shift+G が Blender 本来の"
-        "「グループで選択」「類似選択」として働きます",
+    "Use Smart Clipping in this scene. When off, its shortcut (Shift+G unless changed) "
+    "does what Blender assigns to the key":
+        "このシーンで Smart Clipping を使います。オフのときは、ショートカットのキー"
+        "（初期設定は Shift+G）が Blender 本来の機能として働きます",
     "Which meshes the move snaps to. Press S while moving to switch":
         "移動中にスナップする先のメッシュです。移動中は S キーで切り替えられます",
     "Same Mesh": "同じメッシュ",

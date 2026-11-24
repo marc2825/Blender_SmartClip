@@ -8,15 +8,15 @@ body:
     attributes:
       value: |
         Thank you for reporting a bug. Please provide enough detail to reproduce it.
-  
+
   - type: input
     id: addon_version
     attributes:
       label: Addon version
-      placeholder: "1.3.2"
+      placeholder: "2.0.1"
     validations:
       required: true
-  
+
   - type: input
     id: blender_version
     attributes:
@@ -24,7 +24,7 @@ body:
       placeholder: "4.0.x"
     validations:
       required: true
-      
+
   - type: input
     id: os
     attributes:
@@ -36,19 +36,19 @@ body:
   - type: dropdown
     id: scope
     attributes:
-      label: Target Scope at time of issue
+      label: Snap To (sidebar panel) at the time of the issue
       options:
-        - SELF
-        - SELECTED
-        - VISIBLE
-        - COLLECTION
+        - Same Mesh
+        - Selected Objects
+        - Visible Objects
+        - Collection
     validations:
       required: true
 
   - type: input
     id: budget
     attributes:
-      label: Max Vertex Budget
+      label: Snap Point Limit (sidebar panel > Limits and Display)
       placeholder: "50000"
     validations:
       required: true
@@ -56,10 +56,10 @@ body:
   - type: dropdown
     id: search
     attributes:
-      label: Snap Search (Preferences > Advanced Settings)
+      label: Snap Search (add-on preferences > Advanced)
       options:
         - Screen-space Grid (default)
-        - 3D KD-tree (experimental)
+        - 3D KD-tree (Experimental)
       default: 0
     validations:
       required: true
@@ -88,7 +88,7 @@ body:
       label: Actual behavior
     validations:
       required: true
-      
+
   - type: textarea
     id: logs
     attributes:

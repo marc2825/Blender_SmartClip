@@ -79,7 +79,7 @@ The sidebar panel (**Tool** tab) holds what changes from task to task; its **Lim
 
 | Setting | Where | Default | Meaning |
 |---|---|---|---|
-| Checkbox in the panel header | Panel | On | Use Smart Clipping in this scene. Off: `Shift+G` does Blender's Select Grouped / Select Similar here |
+| Checkbox in the panel header | Panel | On | Use Smart Clipping in this scene. Off: the shortcut key (`Shift+G` unless changed) does what Blender assigns to it here |
 | Snap To | Panel | Visible Objects | Which meshes to snap to ([Snap To](#snap-to)) |
 | Align Only | Panel | Off | Line up a coordinate instead of snapping onto vertices ([Align Only](#align-only)) |
 | Snap Distance | Panel, preferences | 30 px | How close on screen the moving point must come to a snap point |

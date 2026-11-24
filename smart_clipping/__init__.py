@@ -236,8 +236,8 @@ def register():
 
     bpy.types.Scene.smartclip_enabled = BoolProperty(
         name="Enable Smart Clipping",
-        description=("Use Smart Clipping in this scene. When off, Shift+G does Blender's "
-                     "Select Grouped or Select Similar"),
+        description=("Use Smart Clipping in this scene. When off, its shortcut (Shift+G "
+                     "unless changed) does what Blender assigns to the key"),
         default=True,
     )
     bpy.types.Scene.smartclip_target_scope = EnumProperty(

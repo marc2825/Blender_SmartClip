@@ -42,7 +42,7 @@ The full list of controls, what the viewport shows during a move, and the settin
 
 - Only mesh vertices are snap targets, taken from the geometry (with modifiers) at the moment the move starts.
 - Snap points are limited to **Snap Point Limit** (default 50,000). Beyond it, distant objects are down-sampled or reduced to their bounding-box corners and origin, and the farthest are left out.
-- With the checkbox in the panel header off, `Shift+G` goes back to Blender's Select Grouped / Select Similar in that scene.
+- With the checkbox in the panel header off, the shortcut key (`Shift+G` unless changed) goes back to what Blender assigns to it in that scene (Select Grouped / Select Similar for `Shift+G`).
 
 ## Documentation
 
