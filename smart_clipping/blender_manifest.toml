@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "smart_clipping"
-version = "2.0.3"
+version = "2.1.0"
 name = "Smart Clipping"
 tagline = "Smart guides that snap moves to nearby vertices"
 maintainer = "marc2825"
