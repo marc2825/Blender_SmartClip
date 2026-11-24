@@ -42,6 +42,7 @@ blender --factory-startup --enable-event-simulate --python tests/ui_operator_tes
 - Set `SMARTCLIP_UI_SCREENSHOT_DIR` to a folder to save screenshots of the overlays.
 - Set `SMARTCLIP_UI_BACKEND=KDTREE` to run the checks with the KD-tree search instead of the default grid.
 - Set `SMARTCLIP_UI_LANGUAGE=ja_JP` to run them with the interface in Japanese.
+- Some virtual X11 displays report `Ctrl` as released right after a simulated press. The `Ctrl` check then prints `[SKIP]` with the events the move received, instead of failing ([#26](https://github.com/marc2825/Blender_SmartClip/issues/26)).
 
 ### Manual
 
