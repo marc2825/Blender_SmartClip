@@ -226,7 +226,7 @@ What was checked for the latest release, and what was not. Update it with each r
 | GitHub Actions, Linux | 4.2.23, 5.2.4, 5.3.0 | Extension: validate and build, install and restart phases, headless tests against the installed extension | All pass, nothing skipped |
 | GitHub Actions, Linux, Xvfb | 4.2.23, 5.2.4, 5.3.0 | UI test against the installed extension, with the grid and the KD-tree | 91 / 91 each, nothing skipped |
 | GitHub Actions, Linux | 4.0.2, 4.2.23, 5.2.4 | Headless tests from the source folder, ZIP contents (49 checks), legacy ZIP install tests (fresh, over 1.3.2, over 2.1.0 keeping the settings) | All pass, nothing skipped |
-| GitHub Actions, Linux, Xvfb | 4.0.2, 5.2.4 | UI test from the source folder, the grid and the KD-tree (release gate) | See the release run |
+| GitHub Actions, Linux, Xvfb | 4.0.2, 5.2.4 | UI test from the source folder, the grid and the KD-tree (release gate, dry run) | 91 / 91 each, nothing skipped |
 
 The UI test checks behavior and that the panels draw without errors; on the virtual display the screenshots come out black, so what the overlay looks like was checked on the real display only (screenshots in `assets/listing/`, Blender 5.3.0).
 
