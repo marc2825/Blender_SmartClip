@@ -61,7 +61,7 @@ Registered messages apply to all of Blender, so a word Blender already translate
 
 ### Release ZIP
 
-`tests/install_zip_test.py` installs a packaged ZIP the way a user would and checks that it enables, registers, keeps a cleared hotkey off, keeps a changed key through Use Shortcut off and on, resets it with Reset Shortcut, and disables cleanly. It refuses to run unless the user folders point somewhere disposable:
+`tests/install_zip_test.py` installs a packaged ZIP the way a user would and checks that it enables, carries the license text, registers, keeps a cleared hotkey off, keeps a changed key through Use Shortcut off and on, resets it with Reset Shortcut, disables cleanly, and can be removed. It refuses to run unless the user folders point somewhere disposable:
 
 ```sh
 python scripts/package_addon.py --output-dir /tmp/dist
@@ -119,6 +119,12 @@ Dependabot proposes GitHub Actions updates monthly.
 The workflows get Blender through `.github/scripts/fetch-blender.sh`: the archive and blender.org checksum are cached per version, a cache miss downloads from download.blender.org with mirrors as fallback, and the archive is checked against the checksum on every run. Workflows default to read-only tokens; only the release job can write. The third-party release action is pinned to a commit.
 
 `scripts/package_addon.py` writes files in a fixed order with fixed timestamps, so the same sources always produce the same ZIP and checksum.
+
+## Distribution
+
+The add-on is distributed as a legacy add-on ZIP (`bl_info`, module `smart_clipping`) from GitHub Releases, and supports Blender 4.0 and later. The ZIP contains `smart_clipping/LICENSE`.
+
+There is no `blender_manifest.toml` yet. With one, Blender 4.2+ installs the add-on as an extension under `bl_ext.<repository>.smart_clipping`: its preferences start from their defaults, an installed legacy copy can register alongside it, and 4.0 / 4.1 need the legacy ZIP anyway. The Blender Extensions platform also requires a GPL-compatible license (GPL-3.0-or-later for the whole package), which is open in [#20](https://github.com/marc2825/Blender_SmartClip/issues/20). The extension format will be revisited together with that decision.
 
 ## Versions
 

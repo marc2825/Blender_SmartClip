@@ -1,6 +1,8 @@
 """
 Package the add-on as a release zip (``smart_clipping/`` at the zip root,
 installable via Blender > Preferences > Add-ons > Install from Disk).
+The repository's LICENSE goes in as ``smart_clipping/LICENSE``, so the
+installed add-on carries its license text.
 
 The version comes from ``bl_info`` in ``smart_clipping/__init__.py``.
 ``--version`` (e.g. from a release tag) is optional and must match it.
@@ -66,14 +68,14 @@ def main() -> int:
 
     # Fixed order, timestamps and permissions: the same sources always give a
     # byte-identical ZIP (and checksum).
+    entries = [(file_path.relative_to(root).as_posix(), file_path)
+               for file_path in sorted(addon_dir.rglob("*"))
+               if file_path.is_file()
+               and "__pycache__" not in file_path.parts and file_path.suffix != ".pyc"]
+    entries.append((f"{ADDON_DIR}/LICENSE", root / "LICENSE"))
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file_path in sorted(addon_dir.rglob("*")):
-            if file_path.is_dir():
-                continue
-            if "__pycache__" in file_path.parts or file_path.suffix == ".pyc":
-                continue
-            info = zipfile.ZipInfo(file_path.relative_to(root).as_posix(),
-                                   date_time=(1980, 1, 1, 0, 0, 0))
+        for name, file_path in sorted(entries):
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             info.create_system = 3          # Unix, whatever OS builds the ZIP
             info.external_attr = 0o644 << 16

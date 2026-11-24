@@ -81,6 +81,7 @@ def main():
     user_root = os.path.abspath(os.environ.get("BLENDER_USER_SCRIPTS")
                                 or os.environ["BLENDER_USER_RESOURCES"])
     check("installed_in_user_folder", installed_at.startswith(user_root), installed_at)
+    check("license_included", os.path.isfile(os.path.join(installed_at, "LICENSE")))
 
     match = re.search(r"-v(\d+\.\d+\.\d+)\.zip$", zip_path)
     version = ".".join(str(v) for v in module.bl_info["version"])
