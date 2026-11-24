@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Smart Clipping",
     "author": "marc2825",
-    "version": (1, 3, 2),
+    "version": (2, 0, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Smart Clipping",
     "description": "Move with guide lines that snap to nearby vertices, line up coordinates "
