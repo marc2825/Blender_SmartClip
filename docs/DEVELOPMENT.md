@@ -126,6 +126,25 @@ blender --background --factory-startup --python-exit-code 1 --python tests/bench
   --verts 4000000 --objects 1 --budget 50000
 ```
 
+Measured for [#30](https://github.com/marc2825/Blender_SmartClip/issues/30) on a GitHub-hosted runner (Linux, 4 vCPUs, 16 GB). The memory column is the growth of the resident set during the collection, over what the scene already used ("scene").
+
+| Evaluated vertices | Objects | Snap Point Limit | Start of a move, 4.0.2 / 5.2.4 (s) | Memory growth, 4.0.2 / 5.2.4 (MiB) | Scene, 5.2.4 (MiB) |
+|---|---|---|---|---|---|
+| 1,000,000 | 1 | 50,000 | 0.05 / 0.07 | 34 / 35 | 466 |
+| 1,000,000 | 1 | 1,000,000 | 0.17 / 0.13 | 89 / 92 | 450 |
+| 4,000,000 | 1 | 50,000 | 0.18 / 0.21 | 107 / 109 | 784 |
+| 4,000,000 | 1 | 1,000,000 | 0.32 / 0.30 | 158 / 171 | 783 |
+| 4,000,000 | 8 | 50,000 | 0.16 / 0.21 | 26 / 26 | 770 |
+| 4,000,000 | 8 | 1,000,000 | 0.23 / 0.26 | 77 / 81 | 770 |
+| 9,000,000 | 1 | 50,000 | 0.40 / 0.47 | 239 / 233 | 1,369 |
+| 9,000,000 | 1 | 1,000,000 | 0.55 / 0.56 | 290 / 283 | 1,372 |
+| 16,000,000 | 1 | 50,000 | 0.69 / 0.83 | 427 / 432 | 2,175 |
+
+- Time and memory grow about linearly with the vertices read: about 0.05 s and 27 MiB per million vertices of one mesh. Reading the evaluated coordinates is most of it; the limit adds a little (the points kept).
+- Split over eight meshes the peak is lower, since each mesh's arrays are freed before the next is read.
+- Switching Snap To with `S` costs the same as the start (within a few percent).
+- This was judged acceptable, so the collection is unchanged; the guide gives the numbers and when to narrow Snap To instead.
+
 ## CI
 
 | Workflow | Runs on | What it does |

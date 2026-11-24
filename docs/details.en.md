@@ -128,6 +128,12 @@ Snap Point Limit caps the total number of snap points. Objects in view come firs
 
 After a move that hit the limit, the panel shows "Snap point limit reached" with how many objects were simplified (sampled or reduced to their box) and left out. During the move, the lower left of the viewport says so.
 
+The limit bounds the points that are kept. Starting a move (and switching Snap To with `S`) still reads every vertex of the meshes in scope, with modifiers, before thinning them out. Measured on a mesh of 16 million evaluated vertices, that took about 0.7–0.8 seconds and about 430 MB of extra memory (about a fifth of what the scene itself used), both growing about linearly with the vertex count (Blender 4.0.2 / 5.2.4, [measurements](DEVELOPMENT.md#large-meshes)).
+
+- The default of 50,000 is enough in most scenes.
+- Raising the limit to 1,000,000 adds little to the start of a move (4 million vertices: about 0.2 s → 0.3 s), but every mouse move gets slower the more points are kept (see [Snap Search](#how-candidates-are-looked-up-snap-search)).
+- If starting a move is slow in a scene with tens of millions of vertices, set Snap To to Selected Objects or Collection to leave the heavy meshes out.
+
 ## How candidates are chosen
 
 A vertex is a candidate when it lies within the snap distance of the moving point projected on screen. The mouse cursor position is not used. Every vertex that qualifies is checked, so crowded geometry does not hide candidates.
