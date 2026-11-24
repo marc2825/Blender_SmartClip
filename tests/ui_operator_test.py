@@ -16,11 +16,15 @@ OpenGL, SMARTCLIP_UI_BACKEND=KDTREE to run the checks with the experimental
 KD-tree snap search instead of the default screen-space grid,
 SMARTCLIP_UI_LANGUAGE=ja_JP to run them with the interface in Japanese,
 SMARTCLIP_UI_SCALE=2 to run them at a larger interface scale (as on HiDPI
-displays), and SMARTCLIP_UI_THEME=light to use Blender's light theme.
+displays), SMARTCLIP_UI_THEME=light to use Blender's light theme, and
+SMARTCLIP_UI_MODULE=NAME to test the add-on already enabled under that module
+name (the installed extension, bl_ext.user_default.smart_clipping) instead of
+the source folder.
 
 Exit code 0 = all checks passed, 1 = failures.
 """
 
+import importlib
 import io
 import os
 import sys
@@ -36,7 +40,11 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-import smart_clipping  # noqa: E402
+# The add-on under test: the source folder, or a copy Blender installed
+INSTALLED = os.environ.get("SMARTCLIP_UI_MODULE", "").strip()
+smart_clipping = importlib.import_module(INSTALLED or "smart_clipping")
+for _name in ("detector", "keymap", "ops", "utils"):
+    importlib.import_module(f"{smart_clipping.__name__}.{_name}")
 
 # Seconds between simulated events.  Software OpenGL on a virtual display
 # redraws slowly, so CI sets SMARTCLIP_UI_STEP higher.
@@ -923,8 +931,14 @@ def main():
     global _TEE
     tee = _TEE = _StderrTee(sys.stderr)
     sys.stderr = tee
-    if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
+    if INSTALLED:
+        if INSTALLED not in bpy.context.preferences.addons:
+            raise SystemExit(f"{INSTALLED} is not enabled in this Blender")
+    elif not hasattr(bpy.types.Scene, "smartclip_target_scope"):
         smart_clipping.register()
+    print(f"[ui:test] add-on: {smart_clipping.__name__} "
+          f"({'installed' if INSTALLED else 'source folder'}), Blender {bpy.app.version_string}",
+          flush=True)
     if LANGUAGE:
         view = bpy.context.preferences.view
         view.language = LANGUAGE
@@ -948,9 +962,12 @@ def main():
         if BACKEND not in smart_clipping.utils.SEARCH_BACKENDS:
             raise SystemExit(f"SMARTCLIP_UI_BACKEND must be one of "
                              f"{smart_clipping.utils.SEARCH_BACKENDS}, not {BACKEND!r}")
-        prefs = SimpleNamespace(max_vertex_budget=smart_clipping.utils.DEFAULT_VERTEX_BUDGET,
-                                search_backend=BACKEND)
-        smart_clipping.detector.get_addon_prefs = lambda _ctx: prefs
+        if INSTALLED:
+            bpy.context.preferences.addons[INSTALLED].preferences.search_backend = BACKEND
+        else:
+            prefs = SimpleNamespace(max_vertex_budget=smart_clipping.utils.DEFAULT_VERTEX_BUDGET,
+                                    search_backend=BACKEND)
+            smart_clipping.detector.get_addon_prefs = lambda _ctx: prefs
     bpy.utils.register_class(SMARTCLIP_TEST_OT_probe)
     # Added in the same tick as the add-on's items so both are merged into the
     # user keymap together; head=True places it right after Smart Clipping's.

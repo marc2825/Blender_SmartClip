@@ -23,15 +23,26 @@ jobs:
       versions: '["4.0.2", "5.2.4"]'
       backends: '["GRID", "KDTREE"]'
 
+  # The same UI test against the extension ZIP installed the way a user
+  # would, on the oldest Blender that installs extensions and the current LTS.
+  ui-tests-extension:
+    uses: ./.github/workflows/ui-tests.yml
+    with:
+      versions: '["4.2.23", "5.2.4"]'
+      backends: '["GRID"]'
+      installed: true
+
   package-and-release:
-    needs: ui-tests
+    needs: [ui-tests, ui-tests-extension]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write     # create the GitHub release
     env:
-      # Oldest supported Blender: the ZIP is installed into it before release
+      # Oldest supported Blender for each ZIP: they are installed into it
+      # before release
       BLENDER_VERSION: "4.0.2"
+      EXTENSION_BLENDER_VERSION: "4.2.23"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -51,6 +62,7 @@ jobs:
           python scripts/versioning.py
           python scripts/package_addon.py --version "${VERSION}"
           python scripts/versioning.py --notes "${VERSION}" --output dist/RELEASE_NOTES.md
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
 
       - name: Install Blender Runtime Dependencies
         run: |
@@ -67,7 +79,15 @@ jobs:
             blender-${{ env.BLENDER_VERSION }}.sha256
           key: blender-${{ env.BLENDER_VERSION }}-linux-x64-v2
 
-      - name: Install the ZIP into Blender
+      - name: Restore Blender Archive (extensions)
+        uses: actions/cache@v6
+        with:
+          path: |
+            blender-${{ env.EXTENSION_BLENDER_VERSION }}-linux-x64.tar.xz
+            blender-${{ env.EXTENSION_BLENDER_VERSION }}.sha256
+          key: blender-${{ env.EXTENSION_BLENDER_VERSION }}-linux-x64-v2
+
+      - name: Install the Legacy ZIP into Blender
         shell: bash
         run: |
           set -euxo pipefail
@@ -78,7 +98,25 @@ jobs:
           BLENDER_USER_SCRIPTS="${user}/scripts" \
           BLENDER_USER_CONFIG="${user}/config" \
             "blender-${BLENDER_VERSION}-linux-x64/blender" --background --factory-startup \
-              --python-exit-code 1 --python tests/install_zip_test.py -- dist/smart_clipping-v*.zip
+              --python-exit-code 1 --python tests/install_zip_test.py -- "dist/smart_clipping-v${VERSION}.zip"
+
+      - name: Validate and Install the Extension ZIP
+        shell: bash
+        run: |
+          set -euxo pipefail
+          bash .github/scripts/fetch-blender.sh "${EXTENSION_BLENDER_VERSION}"
+          tar -xf "blender-${EXTENSION_BLENDER_VERSION}-linux-x64.tar.xz"
+          blender="blender-${EXTENSION_BLENDER_VERSION}-linux-x64/blender"
+          ext="dist/smart_clipping-v${VERSION}-extension.zip"
+          "${blender}" --command extension validate "${ext}"
+          user="${RUNNER_TEMP}/blender-user-extension"
+          BLENDER_USER_RESOURCES="${user}" \
+          BLENDER_USER_SCRIPTS="${user}/scripts" \
+          BLENDER_USER_CONFIG="${user}/config" \
+          BLENDER_USER_EXTENSIONS="${user}/extensions" \
+            "${blender}" --background --factory-startup --python-exit-code 1 \
+              --python tests/extension_install_test.py -- \
+                --phase install "${ext}" "dist/smart_clipping-v${VERSION}.zip"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v7
@@ -100,3 +138,5 @@ jobs:
           files: |
             dist/smart_clipping-${{ github.ref_name }}.zip
             dist/smart_clipping-${{ github.ref_name }}.sha256
+            dist/smart_clipping-${{ github.ref_name }}-extension.zip
+            dist/smart_clipping-${{ github.ref_name }}-extension.sha256

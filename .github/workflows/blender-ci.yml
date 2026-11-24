@@ -80,27 +80,40 @@ jobs:
 
       - name: Run Headless Addon Tests
         run: |
+          set -o pipefail
           blender \
             --background \
             --factory-startup \
             --python-exit-code 1 \
-            --python tests/headless_test_runner.py
+            --python tests/headless_test_runner.py 2>&1 | tee "${RUNNER_TEMP}/headless.log"
 
-      - name: Build and Install the Release ZIP
+      # The result, failed and skipped cases in the run's summary page
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "### Headless, Blender ${BLENDER_VERSION}"
+            grep -h '^\[smartclip:test\] summary' "${RUNNER_TEMP}/headless.log" || echo "No summary."
+            grep -h -E '^\[(FAIL|SKIP)\]' "${RUNNER_TEMP}/headless.log" | sed 's/^/- /' || true
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Build and Install the Legacy ZIP
         shell: bash
         run: |
           set -euxo pipefail
           python scripts/package_addon.py --output-dir "${RUNNER_TEMP}/dist"
+          version="$(python -c 'import sys; sys.path.insert(0, "scripts"); import versioning; print(versioning.read_bl_info_version())')"
+          echo "LEGACY_ZIP=${RUNNER_TEMP}/dist/smart_clipping-v${version}.zip" >> "${GITHUB_ENV}"
           user="${RUNNER_TEMP}/blender-user"
           BLENDER_USER_RESOURCES="${user}" \
           BLENDER_USER_SCRIPTS="${user}/scripts" \
           BLENDER_USER_CONFIG="${user}/config" \
             blender --background --factory-startup --python-exit-code 1 \
-              --python tests/install_zip_test.py -- "${RUNNER_TEMP}"/dist/smart_clipping-v*.zip
+              --python tests/install_zip_test.py -- "${RUNNER_TEMP}/dist/smart_clipping-v${version}.zip"
 
       # Updating in place from 1.3.2 (the release commit, so it does not
       # depend on a release or tag) and switching off/on without a restart
-      - name: Install the Release ZIP over 1.3.2
+      - name: Install the Legacy ZIP over 1.3.2
         shell: bash
         run: |
           set -euxo pipefail
@@ -113,5 +126,92 @@ jobs:
           BLENDER_USER_CONFIG="${user}/config" \
             blender --background --factory-startup --python-exit-code 1 \
               --python tests/install_zip_test.py -- \
-                --upgrade-from "${RUNNER_TEMP}/smart_clipping-v1.3.2.zip" \
-                "${RUNNER_TEMP}"/dist/smart_clipping-v*.zip
+                --upgrade-from "${RUNNER_TEMP}/smart_clipping-v1.3.2.zip" "${LEGACY_ZIP}"
+
+  # The extension ZIP on the Blender versions that install extensions: the
+  # oldest (4.2 LTS), the current LTS and the latest release.
+  extension-tests:
+    name: extension-tests (Blender ${{ matrix.blender }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        blender: ["4.2.23", "5.2.4", "5.3.0"]
+    env:
+      BLENDER_VERSION: ${{ matrix.blender }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Blender Runtime Dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libx11-6 libxrender1 libxrandr2 libxfixes3 libxi6 \
+            libxkbcommon0 libxxf86vm1 libsm6 libegl1 libgl1 libdbus-1-3
+
+      - name: Restore Blender Archive
+        uses: actions/cache@v6
+        with:
+          path: |
+            blender-${{ matrix.blender }}-linux-x64.tar.xz
+            blender-${{ matrix.blender }}.sha256
+          key: blender-${{ matrix.blender }}-linux-x64-v2
+
+      - name: Download and Install Blender
+        run: |
+          set -euxo pipefail
+          bash .github/scripts/fetch-blender.sh "${BLENDER_VERSION}"
+          tar -xf "blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          echo "${PWD}/blender-${BLENDER_VERSION}-linux-x64" >> "${GITHUB_PATH}"
+
+      - name: Build Both ZIPs
+        run: |
+          set -euxo pipefail
+          python scripts/package_addon.py --output-dir "${RUNNER_TEMP}/dist"
+          version="$(python -c 'import sys; sys.path.insert(0, "scripts"); import versioning; print(versioning.read_bl_info_version())')"
+          echo "EXT_ZIP=${RUNNER_TEMP}/dist/smart_clipping-v${version}-extension.zip" >> "${GITHUB_ENV}"
+          echo "LEGACY_ZIP=${RUNNER_TEMP}/dist/smart_clipping-v${version}.zip" >> "${GITHUB_ENV}"
+
+      # Blender's own checks: the manifest (fields, tags) in the source folder
+      # and in the ZIP, and the ZIP laid out as its own build would lay it out
+      - name: Validate with Blender's Extension Tools
+        run: |
+          set -euxo pipefail
+          blender --command extension validate smart_clipping
+          blender --command extension validate "${EXT_ZIP}"
+          stage="${RUNNER_TEMP}/stage"
+          mkdir -p "${stage}/src" "${stage}/out"
+          unzip -q "${EXT_ZIP}" -d "${stage}/src"
+          blender --command extension build --source-dir "${stage}/src" --output-dir "${stage}/out"
+          diff <(unzip -Z1 "${EXT_ZIP}" | sort) <(unzip -Z1 "${stage}"/out/*.zip | sort)
+
+      - name: Install, Restart and Coexist with the Legacy Add-on
+        run: |
+          set -euxo pipefail
+          user="${RUNNER_TEMP}/blender-user"
+          export BLENDER_USER_RESOURCES="${user}" BLENDER_USER_SCRIPTS="${user}/scripts" \
+                 BLENDER_USER_CONFIG="${user}/config" BLENDER_USER_EXTENSIONS="${user}/extensions"
+          log="${RUNNER_TEMP}/extension.log"
+          blender --background --factory-startup --python-exit-code 1 \
+            --python tests/extension_install_test.py -- --phase install "${EXT_ZIP}" "${LEGACY_ZIP}" \
+            2>&1 | tee -a "${log}"
+          blender --background --python-exit-code 1 \
+            --python tests/extension_install_test.py -- --phase reload "${EXT_ZIP}" "${LEGACY_ZIP}" \
+            2>&1 | tee -a "${log}"
+          # Every headless case against the installed extension (its bl_ext
+          # module name, real preferences)
+          blender --background --python-exit-code 1 \
+            --python tests/headless_test_runner.py -- --module bl_ext.user_default.smart_clipping \
+            2>&1 | tee -a "${log}"
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "### Extension, Blender ${BLENDER_VERSION}"
+            grep -h -E '^\[(extension:test\]|smartclip:test\] summary)' "${RUNNER_TEMP}/extension.log" \
+              || echo "No summary."
+            grep -h -E '^\[(FAIL|SKIP)\]' "${RUNNER_TEMP}/extension.log" | sed 's/^/- /' || true
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -4,6 +4,8 @@ name: UI Tests
 # Blender window) on a virtual display.  Started by hand, and by the release
 # workflow before it publishes (a release gate); it does not run on pull
 # requests, where a GUI job on software OpenGL would slow every change down.
+# With `installed`, the extension ZIP is built and installed the way a user
+# would (tests/extension_install_test.py) and the test runs against it.
 on:
   workflow_dispatch:
     inputs:
@@ -17,6 +19,11 @@ on:
         required: false
         default: '["GRID"]'
         type: string
+      installed:
+        description: "Test the installed extension ZIP instead of the source folder (Blender 4.2+)"
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       versions:
@@ -27,13 +34,17 @@ on:
         required: false
         default: '["GRID", "KDTREE"]'
         type: string
+      installed:
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   ui-tests:
-    name: ui-tests (Blender ${{ matrix.blender }}, ${{ matrix.backend }})
+    name: ui-tests (Blender ${{ matrix.blender }}, ${{ matrix.backend }}${{ inputs.installed && ', extension' || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -43,6 +54,7 @@ jobs:
         backend: ${{ fromJSON(inputs.backends || '["GRID"]') }}
     env:
       BLENDER_VERSION: ${{ matrix.blender }}
+      INSTALLED: ${{ inputs.installed && 'bl_ext.user_default.smart_clipping' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -69,22 +81,46 @@ jobs:
           bash .github/scripts/fetch-blender.sh "${BLENDER_VERSION}"
           tar -xf "blender-${BLENDER_VERSION}-linux-x64.tar.xz"
 
+      # The extension as a user gets it: built, installed from the ZIP into a
+      # fresh user folder and enabled, with its preferences saved there.
+      - name: Install the Extension ZIP
+        if: inputs.installed
+        run: |
+          set -euxo pipefail
+          python scripts/package_addon.py --output-dir "${RUNNER_TEMP}/dist"
+          version="$(python -c 'import sys; sys.path.insert(0, "scripts"); import versioning; print(versioning.read_bl_info_version())')"
+          user="${RUNNER_TEMP}/blender-user"
+          export BLENDER_USER_RESOURCES="${user}" BLENDER_USER_SCRIPTS="${user}/scripts" \
+                 BLENDER_USER_CONFIG="${user}/config" BLENDER_USER_EXTENSIONS="${user}/extensions"
+          env | grep '^BLENDER_USER_' >> "${GITHUB_ENV}"
+          blender="blender-${BLENDER_VERSION}-linux-x64/blender"
+          ext="${RUNNER_TEMP}/dist/smart_clipping-v${version}-extension.zip"
+          legacy="${RUNNER_TEMP}/dist/smart_clipping-v${version}.zip"
+          "${blender}" --background --factory-startup --python-exit-code 1 \
+            --python tests/extension_install_test.py -- --phase install "${ext}" "${legacy}"
+          "${blender}" --background --python-exit-code 1 \
+            --python tests/extension_install_test.py -- --phase reload "${ext}" "${legacy}"
+
       - name: Run UI Test on a Virtual Display
         env:
           SMARTCLIP_UI_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
           # software OpenGL redraws slowly; give events time to be processed
           SMARTCLIP_UI_STEP: "0.8"
           SMARTCLIP_UI_BACKEND: ${{ matrix.backend }}
+          SMARTCLIP_UI_MODULE: ${{ env.INSTALLED }}
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           set -euxo pipefail
           mkdir -p "${SMARTCLIP_UI_SCREENSHOT_DIR}"
           gpu_args="--gpu-backend opengl"
           case "${BLENDER_VERSION}" in 4.0.*|4.1.*) gpu_args="" ;; esac
+          # The installed extension is enabled by the preferences saved above
+          startup="--factory-startup"
+          if [[ -n "${INSTALLED}" ]]; then startup=""; fi
           # --python-exit-code: an exception before the test is running would
           # otherwise leave the Blender window open until the job times out.
           xvfb-run -a -s "-screen 0 1920x1080x24" \
-            "blender-${BLENDER_VERSION}-linux-x64/blender" --factory-startup \
+            "blender-${BLENDER_VERSION}-linux-x64/blender" ${startup} \
               --enable-event-simulate ${gpu_args} --python-exit-code 1 \
               --python tests/ui_operator_test.py 2>&1 | tee "${RUNNER_TEMP}/ui-test.log"
 
@@ -94,7 +130,7 @@ jobs:
         run: |
           log="${RUNNER_TEMP}/ui-test.log"
           {
-            echo "### Blender ${BLENDER_VERSION}, ${{ matrix.backend }}"
+            echo "### Blender ${BLENDER_VERSION}, ${{ matrix.backend }}${INSTALLED:+, extension}"
             echo
             grep -h '^\[ui:test\] summary' "${log}" || echo "No summary: the test did not finish."
             echo
@@ -107,6 +143,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ui-test-screenshots-${{ matrix.blender }}-${{ matrix.backend }}
+          name: ui-test-screenshots-${{ matrix.blender }}-${{ matrix.backend }}${{ inputs.installed && '-extension' || '' }}
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: ignore

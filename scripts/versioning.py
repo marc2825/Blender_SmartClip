@@ -14,6 +14,7 @@ Print the CHANGELOG section of a version (used as GitHub release notes):
   python scripts/versioning.py --notes 1.2.0 [--output dist/RELEASE_NOTES.md]
 
 Checks:
+  - smart_clipping/blender_manifest.toml: ``version`` (the extension's)
   - CHANGELOG.md: newest released entry is ``## [X.Y.Z] - YYYY-MM-DD``
   - CITATION.cff: ``version`` and ``date-released`` match that entry
   - README.md / README.ja.md: the static version badge shows the version
@@ -29,6 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ADDON_DIR = "smart_clipping"
+MANIFEST = "blender_manifest.toml"     # the extension manifest, in ADDON_DIR
 
 _README_BADGE = re.compile(r"img\.shields\.io/badge/version-(?P<version>[0-9.]+)-")
 _READMES = ("README.md", "README.ja.md")
@@ -45,6 +47,19 @@ def read_bl_info_version(root: Path = ROOT) -> str:
             info = ast.literal_eval(node.value)
             return ".".join(str(part) for part in info["version"])
     raise RuntimeError(f"bl_info not found in {ADDON_DIR}/__init__.py")
+
+
+def read_manifest_version(root: Path = ROOT) -> str:
+    """Return ``version`` from the extension manifest."""
+    text = (root / ADDON_DIR / MANIFEST).read_text(encoding="utf-8")
+    try:
+        import tomllib                      # Python 3.11+
+    except ModuleNotFoundError:
+        match = re.search(r'^version\s*=\s*"([^"]*)"\s*$', text, re.M)
+        if match is None:
+            raise RuntimeError(f"no version in {ADDON_DIR}/{MANIFEST}") from None
+        return match.group(1)
+    return str(tomllib.loads(text)["version"])
 
 
 def latest_changelog_release(root: Path = ROOT) -> "tuple[str, str | None]":
@@ -79,6 +94,10 @@ def check(root: Path = ROOT) -> "list[str]":
     """Return a list of human-readable mismatches (empty = consistent)."""
     version = read_bl_info_version(root)
     problems = []
+
+    manifest_version = read_manifest_version(root)
+    if manifest_version != version:
+        problems.append(f"{ADDON_DIR}/{MANIFEST} version is {manifest_version}, bl_info is {version}")
 
     cl_version, cl_date = latest_changelog_release(root)
     if cl_version != version:

@@ -7,9 +7,14 @@ Smart Clipping headless test runner for Blender.
 Usage:
   blender --background --factory-startup --python tests/headless_test_runner.py
   blender --background --factory-startup --python tests/headless_test_runner.py -- --case budget_fallback
+
+With --module NAME the cases run against the add-on already enabled under
+that name instead of the source folder, e.g. the installed extension
+(``bl_ext.user_default.smart_clipping``, see tests/extension_install_test.py).
 """
 
 import argparse
+import importlib
 import os
 import sys
 import time
@@ -27,11 +32,34 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-import smart_clipping  # noqa: E402
-from smart_clipping import detector, ops, utils  # noqa: E402
+
+def _module_arg():
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    return argv[argv.index("--module") + 1] if "--module" in argv[:-1] else None
+
+
+INSTALLED = _module_arg()            # None: the source folder
+PACKAGE = INSTALLED or "smart_clipping"
+
+
+def _sub(name):
+    return importlib.import_module(f"{PACKAGE}.{name}")
+
+
+smart_clipping = importlib.import_module(PACKAGE)
+detector, ops, utils = _sub("detector"), _sub("ops"), _sub("utils")
+
+
+class Skip(Exception):
+    """The case cannot run in this Blender; reported as skipped, not passed."""
 
 
 def _ensure_addon_enabled():
+    if INSTALLED:
+        # Installed and enabled by Blender, with its preferences available.
+        if INSTALLED not in bpy.context.preferences.addons:
+            raise SystemExit(f"{INSTALLED} is not enabled in this Blender")
+        return
     # Register by import path (the addon is not installed in this Blender).
     # Preferences stay unavailable, so code falls back to its defaults and
     # tests control the budget through _temporary_budget().
@@ -837,7 +865,7 @@ def case_clear_hotkeys_stays_cleared():
         scene.smartclip_enabled = False
         scene.smartclip_enabled = True
         for handler in list(bpy.app.handlers.load_post):
-            if getattr(handler, "__module__", "").startswith("smart_clipping"):
+            if getattr(handler, "__module__", "").startswith(PACKAGE):
                 handler(None)
         assert not any(kmi.active for kmi in kmis), [kmi.active for kmi in kmis]
         bpy.ops.smartclip.add_default_hotkeys()
@@ -1647,7 +1675,7 @@ def case_pivot_objects():
 def case_overlay_insets():
     # Labels keep clear of the toolbar, the sidebar and the Adjust Last
     # Operation panel when they overlap the 3D View (#31).
-    from smart_clipping import drawing
+    drawing = _sub("drawing")
 
     def reg(kind, x, y, w, h):
         return SimpleNamespace(type=kind, x=x, y=y, width=w, height=h)
@@ -1668,7 +1696,7 @@ def case_overlay_insets():
 
 
 def case_hud_words():
-    from smart_clipping import hud
+    hud = _sub("hud")
 
     scene = bpy.context.scene
     units = scene.unit_settings
@@ -1754,7 +1782,7 @@ def case_build_summary():
 def case_translations():
     import string
 
-    from smart_clipping import hud, i18n
+    hud, i18n = _sub("hud"), _sub("i18n")
 
     view = bpy.context.preferences.view
     tr = bpy.app.translations
@@ -1771,8 +1799,7 @@ def case_translations():
         for name in switches:
             setattr(view, name, "ja_JP" if name == "language" else True)
         if tr.locale != "ja_JP":
-            print("  (this Blender cannot switch to Japanese; translation checks skipped)")
-            return
+            raise Skip("this Blender cannot switch to Japanese")
 
         for msgid, msgstr in i18n.MESSAGES.items():
             assert placeholders(msgid) == placeholders(msgstr), msgid
@@ -1850,7 +1877,7 @@ def case_translations():
 
 
 def case_shortcut_reset():
-    from smart_clipping import keymap
+    keymap = _sub("keymap")
 
     kmis = _addon_kmis()
     assert kmis
@@ -1877,7 +1904,7 @@ def case_shortcut_names_what_it_overrides():
     # Issue #29: the preferences say what the key takes over.  Without a
     # window Blender's own keymaps are empty, so a stand-in for Select Grouped
     # is added after the add-on's item (the UI test checks the real ones).
-    from smart_clipping import keymap
+    keymap = _sub("keymap")
 
     km = bpy.context.window_manager.keyconfigs.addon.keymaps.get("Object Mode")
     ours = next(k for k in km.keymap_items if k.idname == keymap.MOVE_IDNAME)
@@ -2010,6 +2037,8 @@ def _parse_args():
         argv = []
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=sorted(CASES.keys()), default=None)
+    parser.add_argument("--module", default=None,
+                        help="run against the add-on enabled under this module name")
     return parser.parse_args(argv)
 
 
@@ -2019,18 +2048,25 @@ def main():
     selected = [args.case] if args.case else list(CASES.keys())
 
     failures = 0
+    skipped = 0
+    print(f"[smartclip:test] add-on: {smart_clipping.__name__} "
+          f"({'installed' if INSTALLED else 'source folder'}), Blender {bpy.app.version_string}")
     print("[smartclip:test] running cases:", ", ".join(selected))
     for name in selected:
         fn = CASES[name]
         try:
             fn()
             print(f"[PASS] {name}")
+        except Skip as exc:
+            skipped += 1
+            print(f"[SKIP] {name}: {exc}")
         except Exception as exc:
             failures += 1
             print(f"[FAIL] {name}: {exc}")
             traceback.print_exc()
 
-    print(f"[smartclip:test] summary: passed={len(selected) - failures} failed={failures}")
+    print(f"[smartclip:test] summary: passed={len(selected) - failures - skipped} "
+          f"failed={failures} skipped={skipped}")
     if failures:
         sys.exit(1)
 

@@ -1,0 +1,21 @@
+schema_version = "1.0.0"
+
+id = "smart_clipping"
+version = "2.0.3"
+name = "Smart Clipping"
+tagline = "Smart guides that snap moves to nearby vertices"
+maintainer = "marc2825"
+type = "add-on"
+
+website = "https://github.com/marc2825/Blender_SmartClip"
+
+tags = ["3D View", "Modeling", "Mesh"]
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+copyright = [
+  "2026 marc2825",
+]

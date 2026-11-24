@@ -16,13 +16,17 @@ bl_info = {
 
 import sys as _sys
 
-# After Install from Disk over an older version, switching the add-on off and
-# on again re-runs only this file.  The submodules of the old version are
-# still loaded, both in sys.modules and as attributes of this package (which
-# `from . import x` would reuse), so drop them and import the new files.
-for _name in [n for n in _sys.modules if n.startswith(__name__ + ".")]:
-    del _sys.modules[_name]
-    globals().pop(_name[len(__name__) + 1:], None)
+# Legacy add-on only (a top-level module; an extension is a sub-package of its
+# repository).  After Install from Disk over an older version, switching the
+# add-on off and on again re-runs only this file.  The submodules of the old
+# version are still loaded, both in sys.modules and as attributes of this
+# package (which `from . import x` would reuse), so drop them and import the
+# new files.  Blender's extension manager unloads an extension's submodules
+# itself when it updates one, so an extension leaves sys.modules alone.
+if "." not in __name__:
+    for _name in [n for n in _sys.modules if n.startswith(__name__ + ".")]:
+        del _sys.modules[_name]
+        globals().pop(_name[len(__name__) + 1:], None)
 
 import bpy
 from bpy.app.handlers import persistent
@@ -232,7 +236,38 @@ def _align_description(axis):
             f"them. Press A while moving to switch")
 
 
+# ======================================================================
+# Another copy (the legacy add-on and the extension side by side)
+# ======================================================================
+# Both register the same operators, panels, Scene properties and Shift+G
+# items.  The copy enabled second stops before registering anything, and as
+# it then never counts as enabled, Blender does not call its unregister().
+
+_registered = False
+
+
+class AlreadyEnabledError(RuntimeError):
+    pass
+
+
+def other_copy() -> "str | None":
+    """Module name of another copy of this add-on that is registered, if any."""
+    panel = getattr(bpy.types, SMARTCLIP_PT_panel.bl_idname, None)
+    owner = getattr(panel, "__module__", None)
+    if owner is None or owner == __name__:
+        return None
+    return owner
+
+
 def register():
+    global _registered
+    owner = other_copy()
+    if owner is not None:
+        raise AlreadyEnabledError(
+            f"Smart Clipping is already enabled as \"{owner}\". Only one copy can be on: "
+            f"turn that one off in Preferences > Add-ons (or Get Extensions) first, "
+            f"then enable this one")
+
     i18n.register()
     for cls in _classes:
         bpy.utils.register_class(cls)
@@ -270,9 +305,16 @@ def register():
     if _on_load_post not in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(_on_load_post)
     bpy.app.timers.register(_deferred_init, first_interval=0.0)
+    _registered = True
 
 
 def unregister():
+    global _registered
+    if not _registered:
+        # register() stopped for another copy: what is registered is that
+        # copy's, so leave it alone.
+        return
+    _registered = False
     if bpy.app.timers.is_registered(_deferred_init):
         bpy.app.timers.unregister(_deferred_init)
     if _on_load_post in bpy.app.handlers.load_post:
