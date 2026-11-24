@@ -287,6 +287,14 @@ def _proxy_coords(source) -> np.ndarray:
     return np.vstack([world, m[:3, 3]])
 
 
+def _may_have_points(obj) -> bool:
+    """False only for a mesh that certainly has no vertices (cheap, no evaluation)."""
+    mesh = getattr(obj, "data", None)
+    if mesh is None or len(obj.modifiers):
+        return True
+    return len(getattr(mesh, "vertices", ())) > 0
+
+
 def _in_view(obj, view) -> bool:
     region, rv3d = view
     screen = world_to_screen(region, rv3d, object_center_world(obj))
@@ -371,7 +379,12 @@ def _collect_snap_points(context, active_obj, moving_verts, exclude_objects, vie
 
     for pos, obj in enumerate(candidates):
         if remaining <= 0:
-            skipped_objects.append(obj.name)
+            # The budget is used up (possibly exactly, by the objects before):
+            # whatever this object has is left out, so the limit counts as
+            # reached.  An empty mesh without modifiers has nothing to lose.
+            if _may_have_points(obj):
+                over_budget = True
+                skipped_objects.append(obj.name)
             continue
         moving = moving_by_data.get(obj.data.as_pointer())
         if obj.mode == "EDIT" or moving is not None:

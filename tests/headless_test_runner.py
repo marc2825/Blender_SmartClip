@@ -317,6 +317,57 @@ def case_budget_partial_fill():
     assert len(far) == 8 and all(m.point_type == "POINT" for m in far)
 
 
+def case_budget_exactly_used_up():
+    # Issue #32: the first object fills the budget exactly, so the next one
+    # is left out; that is the limit being reached.
+    _clear_scene()
+    active = _add_cube("Exact_Active", (0.0, 0.0, 0.0))
+    _add_cube("Exact_Near", (3.0, 0.0, 0.0))                        # 8 verts
+    _add_cube("Exact_Far", (9.0, 0.0, 0.0))                         # 8 verts
+    empty_mesh = bpy.data.meshes.new("Exact_Empty_Mesh")
+    empty = bpy.data.objects.new("Exact_Empty", empty_mesh)          # no vertices
+    bpy.context.scene.collection.objects.link(empty)
+    empty.location = (20.0, 0.0, 0.0)
+    _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+
+    with _temporary_budget(8):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+    assert result.point_count == 8, result.point_count
+    assert result.limit_exceeded
+    assert result.skipped_objects == ["Exact_Far"], result.skipped_objects
+    summary = ops.build_summary(result)
+    assert summary.limit_exceeded and summary.skipped == 1, summary
+
+    # Everything fits exactly: no warning (the empty mesh loses nothing)
+    bpy.data.objects.remove(bpy.data.objects["Exact_Far"])
+    with _temporary_budget(8):
+        result = detector.build_spatial_tree(bpy.context, active_obj=active)
+    assert result.point_count == 8, result.point_count
+    assert not result.limit_exceeded
+    assert result.skipped_objects == [], result.skipped_objects
+
+    # Exactly used up in Edit Mode, by the rest of the edited mesh
+    _select_only(active)
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        bm = bmesh.from_edit_mesh(active.data)
+        bm.verts.ensure_lookup_table()
+        for i, v in enumerate(bm.verts):
+            v.select_set(i == 0)
+        bmesh.update_edit_mesh(active.data)
+        bpy.context.scene.smartclip_target_scope = "VISIBLE"
+        with _temporary_budget(7):
+            result = detector.build_spatial_tree(
+                bpy.context, active_obj=active, moving_verts={active: {0}})
+        names = [m.obj_name for m in result.point_meta]
+        assert names.count("Exact_Active") == 7, names
+        assert result.limit_exceeded
+        assert result.skipped_objects == ["Exact_Near"], result.skipped_objects
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
 def case_scope_collection_recursive():
     _clear_scene()
     active = _add_cube("Rec_Active", (0.0, 0.0, 0.0))
@@ -1804,6 +1855,7 @@ CASES = {
     "scope_collection": case_scope_collection,
     "stress_100k": case_stress_100k_vertices,
     "budget_partial": case_budget_partial_fill,
+    "budget_exactly_used_up": case_budget_exactly_used_up,
     "scope_collection_recursive": case_scope_collection_recursive,
     "edit_mode_sync": case_edit_mode_sync,
     "parent_space_delta": case_parent_space_delta,
