@@ -50,6 +50,7 @@
 - [変更履歴](CHANGELOG.md)
 - [開発者向け資料](docs/DEVELOPMENT.md)（英語）
 - [サポート](SUPPORT.md)：質問は [Discussions](https://github.com/marc2825/Blender_SmartClip/discussions)、不具合は [Issues](https://github.com/marc2825/Blender_SmartClip/issues) へ
+- [セキュリティ](SECURITY.md)：脆弱性は公開の Issue ではなく非公開で報告してください
 
 ## 開発
 

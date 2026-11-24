@@ -50,6 +50,7 @@ The full list of controls, what the viewport shows during a move, and the settin
 - [Changelog](CHANGELOG.md)
 - [Developer guide](docs/DEVELOPMENT.md)
 - [Support](SUPPORT.md): questions in [Discussions](https://github.com/marc2825/Blender_SmartClip/discussions), bugs in [Issues](https://github.com/marc2825/Blender_SmartClip/issues)
+- [Security](SECURITY.md): report vulnerabilities privately, not in a public issue
 
 ## Development
 

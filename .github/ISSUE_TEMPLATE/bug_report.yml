@@ -9,6 +9,9 @@ body:
       value: |
         Thank you for reporting a bug. Please provide enough detail to reproduce it.
 
+        Issues are public. Do not paste secrets or personal data, and report security
+        problems privately instead (see SECURITY.md).
+
   - type: input
     id: addon_version
     attributes:
