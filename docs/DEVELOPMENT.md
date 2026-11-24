@@ -59,6 +59,8 @@ How snapping feels is still worth checking by hand after UI changes. `tests/manu
 blender --python tests/manual_ui_setup.py
 ```
 
+`tests/record_teaser.py` records the README demo (`assets/teaser.gif`) from the current UI with simulated input, so it can be made again when the UI changes; its docstring has the `ffmpeg` command that turns the frames into the GIF.
+
 ### Translation
 
 `smart_clipping/i18n.py` holds the Japanese messages, keyed by the English text used in the code. Blender looks names, tooltips and enum items up there by itself; text the add-on builds (viewport labels, format strings, reports) goes through `i18n.iface` / `tip` / `rpt`.
