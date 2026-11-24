@@ -73,6 +73,12 @@ BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER
 
 With `--upgrade-from OLD.zip` before the ZIP, it first installs and enables `OLD.zip`, then installs the new ZIP over it and switches the add-on off and on without a restart, as a user updating from the Preferences does. CI runs this from 1.3.2 ([#23](https://github.com/marc2825/Blender_SmartClip/issues/23)).
 
+What goes into the ZIP is an allowlist in `scripts/package_addon.py`: the files of `smart_clipping/` that git tracks and whose suffix is in `ALLOWED_SUFFIXES` (`.py`), plus `LICENSE`. Untracked files (caches, local notes, settings) never go in, and a tracked file of another kind stops the build until the list covers it. `tests/package_test.py` (plain Python, no Blender) checks the allowlist, the exact contents, the single top folder, the fixed metadata, that two builds are byte-identical, and the checksum:
+
+```sh
+python tests/package_test.py
+```
+
 ### Benchmark
 
 `tests/benchmark_snap.py` runs every search backend on the same synthetic point clouds (10k to 500k points, uniform and crowded, different scene scales) and reports index build time, query time (median, p95), the cost of the first query after a view change, memory, the share of candidates missed against a brute-force ground truth, and whether the backends return identical lists. It prints a Markdown table at the end and does not pass or fail. `--sizes` picks the point counts, and `--impl` points it at another copy of the package, for example a release exported with `git archive vX.Y.Z smart_clipping`, to compare.

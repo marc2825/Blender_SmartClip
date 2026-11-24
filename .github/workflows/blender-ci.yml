@@ -30,6 +30,9 @@ jobs:
       - name: Version Consistency Check
         run: python scripts/versioning.py
 
+      - name: Release ZIP Contents Check
+        run: python tests/package_test.py
+
       - name: Install Blender Runtime Dependencies
         run: |
           set -euxo pipefail
