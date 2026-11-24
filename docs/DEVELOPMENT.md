@@ -113,6 +113,15 @@ Measured for [#19](https://github.com/marc2825/Blender_SmartClip/issues/19) with
 - Starting a move next to a 1M-vertex mesh: 34 ms (grid) vs. 167 ms (KD-tree) with Max Vertex Budget 50,000, and 57 ms vs. 2,486 ms with a budget of 1,000,000.
 - The grid is faster everywhere except the first mouse move after a view change in uniform clouds, where the KD-tree takes 15–37% less time. Once the cone of sight is narrowed down, the KD-tree's cost is the number of points around the cursor: `mathutils.kdtree` returns and sorts one Python tuple per point found, while the grid works on numpy arrays. Crowded scenes are the worst case.
 
+#### Large meshes
+
+`tests/benchmark_build.py` measures collecting the snap points, which happens when a move starts and when `S` switches Snap To, on grids with a Subdivision Surface modifier (so the points come from the evaluated mesh): the time, the growth of the resident memory over what the scene already used (Linux), and what was kept. It runs one scenario per Blender and skips a scenario that would need more than half of the available memory. `.github/workflows/benchmark.yml` runs a set of scenarios on a GitHub-hosted runner and puts the table in the run's summary.
+
+```sh
+blender --background --factory-startup --python-exit-code 1 --python tests/benchmark_build.py -- \
+  --verts 4000000 --objects 1 --budget 50000
+```
+
 ## CI
 
 | Workflow | Runs on | What it does |

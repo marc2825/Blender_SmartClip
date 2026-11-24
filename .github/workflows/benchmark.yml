@@ -1,0 +1,96 @@
+name: Benchmark
+
+# Collecting snap points on large evaluated meshes (tests/benchmark_build.py):
+# time and peak memory at the start of a move and when S switches Snap To.
+# Started by hand; the results are in the run's summary and as an artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      blender:
+        description: "Blender version"
+        required: false
+        default: "5.2.4"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BLENDER_VERSION: ${{ inputs.blender || '5.2.4' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Blender Runtime Dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libx11-6 libxrender1 libxrandr2 libxfixes3 libxi6 \
+            libxkbcommon0 libxxf86vm1 libsm6 libegl1 libgl1 libdbus-1-3
+
+      - name: Restore Blender Archive
+        uses: actions/cache@v6
+        with:
+          path: |
+            blender-${{ env.BLENDER_VERSION }}-linux-x64.tar.xz
+            blender-${{ env.BLENDER_VERSION }}.sha256
+          key: blender-${{ env.BLENDER_VERSION }}-linux-x64-v2
+
+      - name: Download and Install Blender
+        run: |
+          set -euxo pipefail
+          bash .github/scripts/fetch-blender.sh "${BLENDER_VERSION}"
+          tar -xf "blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+
+      # verts objects budget; a scenario that would need more than half the
+      # available memory is reported as skipped instead of run
+      - name: Run Scenarios
+        run: |
+          set -euo pipefail
+          free -m
+          out="${RUNNER_TEMP}/benchmark.jsonl"
+          : > "${out}"
+          while read -r verts objects budget; do
+            "blender-${BLENDER_VERSION}-linux-x64/blender" --background --factory-startup \
+              --python-exit-code 1 --python tests/benchmark_build.py -- \
+              --verts "${verts}" --objects "${objects}" --budget "${budget}" --output "${out}"
+          done <<'EOF'
+          1000000 1 50000
+          1000000 1 1000000
+          4000000 1 50000
+          4000000 1 1000000
+          4000000 8 50000
+          4000000 8 1000000
+          9000000 1 50000
+          9000000 1 1000000
+          16000000 1 50000
+          EOF
+
+      - name: Summarize
+        if: always()
+        run: |
+          python3 - "${RUNNER_TEMP}/benchmark.jsonl" >> "${GITHUB_STEP_SUMMARY}" <<'EOF'
+          import json, sys
+          rows = [json.loads(line) for line in open(sys.argv[1], encoding="utf-8") if line.strip()]
+          print(f"### Collecting snap points, Blender {rows[0]['blender'] if rows else '?'}\n")
+          print("| Evaluated vertices | Objects | Snap Point Limit | Start of move (s) | S switch (s) "
+                "| Peak memory growth (MiB) | Points kept | Note |")
+          print("|---|---|---|---|---|---|---|---|")
+          for r in rows:
+              note = r.get("skipped", "limit reached" if r.get("limit_exceeded") else "")
+              print(f"| {r.get('verts_evaluated', r['verts_target']):,} | {r['objects']} "
+                    f"| {r['budget']:,} | {r.get('first_build_s', '')} | {r.get('rebuild_s', '')} "
+                    f"| {r.get('peak_growth_mib', '')} | {r.get('points', '')} | {note} |")
+          EOF
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-${{ env.BLENDER_VERSION }}
+          path: ${{ runner.temp }}/benchmark.jsonl
+          if-no-files-found: ignore
