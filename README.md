@@ -1,7 +1,7 @@
 <p align="center">
   <img src="assets/logo.svg" alt="Smart Clipping" height="96" align="middle">
   &nbsp;
-  <a href="https://github.com/marc2825/Blender_SmartClip/releases/latest"><img src="https://img.shields.io/badge/version-2.0.1-blue" alt="Version 2.0.1" align="middle"></a>
+  <a href="https://github.com/marc2825/Blender_SmartClip/releases/latest"><img src="https://img.shields.io/badge/version-2.0.2-blue" alt="Version 2.0.2" align="middle"></a>
   <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&amp;logoColor=white" alt="Blender 4.0+" align="middle"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" align="middle"></a>
 </p>

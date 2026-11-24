@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [2.0.2] - 2026-11-24
+
+### Fixed
+
+- When an axis or plane constraint, Lock Location or an object constraint keeps the moving point off the snap point, the label says "Projected" and how far it is, instead of "Snapped". (#28)
+- Confirming after changing Align Only or Snap To with `A` / `S` without moving is now one undo step. (#33)
+- The snap point limit warning was missing when the limit was used up exactly. (#32)
+- The label next to the snap point no longer goes under the sidebar, and the lines in the lower left stay above the Adjust Last Operation panel. (#31)
+
+### Changed
+
+- The add-on preferences show which of Blender's functions the shortcut is used instead of (Select Grouped / Select Similar for `Shift+G`). (#29)
+- The release ZIP holds only the add-on's Python files and the license. (#36)
+- Docs: what snapping lands on, performance with large meshes, a demo of the current UI, and SECURITY.md for reporting vulnerabilities privately. (#30, #34, #37)
+
 ## [2.0.1] - 2026-11-24
 
 ### Fixed
