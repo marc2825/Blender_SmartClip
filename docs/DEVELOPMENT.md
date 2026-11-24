@@ -24,18 +24,20 @@ This guide is for working on the add-on itself. For installing and using it, see
 Covers snap point collection, candidate search with both backends (they must return identical candidate lists), the operator's `execute` without a window, the move's decisions and words, and the translation (see [Translation](#translation)). CI runs it on every pull request.
 
 ```sh
-blender --background --factory-startup --python tests/headless_test_runner.py
-blender --background --factory-startup --python tests/headless_test_runner.py -- --case stress_100k
+blender --background --factory-startup --python-exit-code 1 --python tests/headless_test_runner.py
+blender --background --factory-startup --python-exit-code 1 --python tests/headless_test_runner.py -- --case stress_100k
 ```
 
 Case names are the keys of `CASES` in the runner. It exits with status 1 if any case fails.
+
+Pass `--python-exit-code 1` to every Blender that runs a test script (CI does): without it, an exception the script does not catch, such as the add-on failing to register, ends Blender with exit code 0 and the run looks green.
 
 ### UI
 
 The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+G`, mouse moves, constraint keys, `Ctrl`, `A`, `S`, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, exact snapping, snap points the move cannot reach (a constraint, Lock Location or Limit Location: "Projected", with Undo / Redo / cancel), `Ctrl`, right click cancelling, the `A` / `S` switches (put back on cancel, one undo step when confirmed without moving), what the shortcut takes over, the status bar, and Edit Mode. It keeps the sidebar open with the panels in the Item tab, so drawing errors in them fail the run.
 
 ```sh
-blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
+blender --factory-startup --enable-event-simulate --python-exit-code 1 --python tests/ui_operator_test.py
 ```
 
 - It needs a display, and real mouse and keyboard input is ignored while it runs.
@@ -45,9 +47,11 @@ blender --factory-startup --enable-event-simulate --python tests/ui_operator_tes
 - Set `SMARTCLIP_UI_SCALE=2` to run them at a larger interface scale (as on HiDPI displays), and `SMARTCLIP_UI_THEME=light` to use Blender's light theme; look at the screenshots for these.
 - Some virtual X11 displays report `Ctrl` as released right after a simulated press. The `Ctrl` check then prints `[SKIP]` with the events the move received, instead of failing ([#26](https://github.com/marc2825/Blender_SmartClip/issues/26)).
 
-### Manual
+### On a virtual display
 
-`.github/workflows/ui-tests.yml` runs the same test on a virtual display (Xvfb, software OpenGL, `SMARTCLIP_UI_STEP=0.8`). It is started by hand (Actions > UI Tests, optionally with a list of Blender versions) until it has proven stable on GitHub-hosted runners. Screenshots taken there come out black even when the checks pass.
+`.github/workflows/ui-tests.yml` runs the same test on a virtual display (Xvfb, software OpenGL, `SMARTCLIP_UI_STEP=0.8`). It runs before every release (see [Releasing](#releasing)) and can be started by hand (Actions > UI Tests, with JSON lists of Blender versions and snap search backends). It does not run on pull requests, where a GUI job on software OpenGL would slow every change down. Each run's summary page lists the result and every failed or skipped check. Screenshots taken there come out black even when the checks pass.
+
+### Manual
 
 How snapping feels is still worth checking by hand after UI changes. `tests/manual_ui_setup.py` builds a scene with targets along each axis, a grid that exceeds the vertex budget, and a collection for Manual Collection scope, then prints what to try.
 
@@ -84,7 +88,7 @@ python tests/package_test.py
 `tests/benchmark_snap.py` runs every search backend on the same synthetic point clouds (10k to 500k points, uniform and crowded, different scene scales) and reports index build time, query time (median, p95), the cost of the first query after a view change, memory, the share of candidates missed against a brute-force ground truth, and whether the backends return identical lists. It prints a Markdown table at the end and does not pass or fail. `--sizes` picks the point counts, and `--impl` points it at another copy of the package, for example a release exported with `git archive vX.Y.Z smart_clipping`, to compare.
 
 ```sh
-blender --background --factory-startup --python tests/benchmark_snap.py -- --quick
+blender --background --factory-startup --python-exit-code 1 --python tests/benchmark_snap.py -- --quick
 ```
 
 #### Grid vs. KD-tree
@@ -126,10 +130,11 @@ blender --background --factory-startup --python-exit-code 1 --python tests/bench
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, compile check, headless tests and ZIP install tests (fresh, and over 1.3.2) on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4 |
+| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, release ZIP contents check, compile check, headless tests and ZIP install tests (fresh, and over 1.3.2) on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4 |
 | `codeql.yml` | Pushes, pull requests, monthly | CodeQL scan of the Python code |
-| `release-addon.yml` | `v*.*.*` tags, manual runs | Packages, installs the ZIP into Blender 4.0.2, and publishes a release (see below) |
-| `ui-tests.yml` | Manual | UI test on a virtual display |
+| `release-addon.yml` | `v*.*.*` tags, manual runs | UI tests as a gate, then packages, installs the ZIP into Blender 4.0.2, and publishes a release (see below) |
+| `ui-tests.yml` | Manual, and called by `release-addon.yml` | UI test on a virtual display |
+| `benchmark.yml` | Manual | Snap point collection on large evaluated meshes (see [Large meshes](#large-meshes)) |
 
 Dependabot proposes GitHub Actions updates monthly.
 
@@ -159,8 +164,8 @@ The badges are static (`img.shields.io/badge/...`): the ones that ask the GitHub
 
 1. Bump `bl_info["version"]`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff` and the README version badges. Run `python scripts/versioning.py`.
 2. Merge to `main` with CI passing.
-3. Optionally preview the package: `gh workflow run release-addon.yml -f version=X.Y.Z` builds the ZIP, checksum, and release notes as a workflow artifact without publishing anything.
-4. Tag the release commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. Optionally preview the package: `gh workflow run release-addon.yml -f version=X.Y.Z` runs the UI tests and builds the ZIP, checksum, and release notes as a workflow artifact without publishing anything.
+4. Tag the release commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. The UI tests run first, on Blender 4.0.2 and 5.2.4 with both snap search backends; the release is published only when they pass. If one fails for a reason that is not the add-on's (the virtual display), re-run the failed jobs.
 5. Install the published ZIP in Blender once to confirm it loads.
 
 The changelog section becomes the body of the GitHub release, so keep it short and written for users. The release workflow fails if the tag does not match `bl_info`; otherwise it attaches `smart_clipping-vX.Y.Z.zip` and `.sha256`.

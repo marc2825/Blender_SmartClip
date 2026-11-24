@@ -15,7 +15,16 @@ permissions:
   contents: read
 
 jobs:
+  # Release gate: the UI test on the oldest supported Blender and the current
+  # LTS, with both snap search backends, at the commit being released.
+  ui-tests:
+    uses: ./.github/workflows/ui-tests.yml
+    with:
+      versions: '["4.0.2", "5.2.4"]'
+      backends: '["GRID", "KDTREE"]'
+
   package-and-release:
+    needs: ui-tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -69,7 +78,7 @@ jobs:
           BLENDER_USER_SCRIPTS="${user}/scripts" \
           BLENDER_USER_CONFIG="${user}/config" \
             "blender-${BLENDER_VERSION}-linux-x64/blender" --background --factory-startup \
-              --python tests/install_zip_test.py -- dist/smart_clipping-v*.zip
+              --python-exit-code 1 --python tests/install_zip_test.py -- dist/smart_clipping-v*.zip
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v7

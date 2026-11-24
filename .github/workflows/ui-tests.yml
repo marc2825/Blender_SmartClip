@@ -1,8 +1,9 @@
 name: UI Tests
 
 # Runs tests/ui_operator_test.py (simulated mouse and keyboard input in a real
-# Blender window) on a virtual display.  Manual only for now: a GUI job on
-# software OpenGL should prove stable before it can block pull requests.
+# Blender window) on a virtual display.  Started by hand, and by the release
+# workflow before it publishes (a release gate); it does not run on pull
+# requests, where a GUI job on software OpenGL would slow every change down.
 on:
   workflow_dispatch:
     inputs:
@@ -11,27 +12,35 @@ on:
         required: false
         default: '["4.0.2", "5.2.4"]'
         type: string
-      backend:
-        description: "Snap search backend (Advanced Settings > Snap Search)"
+      backends:
+        description: 'Snap search backends as a JSON list: ["GRID"], ["KDTREE"] or both'
         required: false
-        default: GRID
-        type: choice
-        options:
-          - GRID
-          - KDTREE
+        default: '["GRID"]'
+        type: string
+  workflow_call:
+    inputs:
+      versions:
+        required: false
+        default: '["4.0.2", "5.2.4"]'
+        type: string
+      backends:
+        required: false
+        default: '["GRID", "KDTREE"]'
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   ui-tests:
-    name: ui-tests (Blender ${{ matrix.blender }}, ${{ inputs.backend || 'GRID' }})
+    name: ui-tests (Blender ${{ matrix.blender }}, ${{ matrix.backend }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         blender: ${{ fromJSON(inputs.versions || '["4.0.2", "5.2.4"]') }}
+        backend: ${{ fromJSON(inputs.backends || '["GRID"]') }}
     env:
       BLENDER_VERSION: ${{ matrix.blender }}
     steps:
@@ -65,17 +74,32 @@ jobs:
           SMARTCLIP_UI_SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
           # software OpenGL redraws slowly; give events time to be processed
           SMARTCLIP_UI_STEP: "0.8"
-          SMARTCLIP_UI_BACKEND: ${{ inputs.backend || 'GRID' }}
+          SMARTCLIP_UI_BACKEND: ${{ matrix.backend }}
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           set -euxo pipefail
           mkdir -p "${SMARTCLIP_UI_SCREENSHOT_DIR}"
           gpu_args="--gpu-backend opengl"
           case "${BLENDER_VERSION}" in 4.0.*|4.1.*) gpu_args="" ;; esac
+          # --python-exit-code: an exception before the test is running would
+          # otherwise leave the Blender window open until the job times out.
           xvfb-run -a -s "-screen 0 1920x1080x24" \
             "blender-${BLENDER_VERSION}-linux-x64/blender" --factory-startup \
-              --enable-event-simulate ${gpu_args} \
-              --python tests/ui_operator_test.py
+              --enable-event-simulate ${gpu_args} --python-exit-code 1 \
+              --python tests/ui_operator_test.py 2>&1 | tee "${RUNNER_TEMP}/ui-test.log"
+
+      # The result, failed and skipped checks in the run's summary page
+      - name: Summarize
+        if: always()
+        run: |
+          log="${RUNNER_TEMP}/ui-test.log"
+          {
+            echo "### Blender ${BLENDER_VERSION}, ${{ matrix.backend }}"
+            echo
+            grep -h '^\[ui:test\] summary' "${log}" || echo "No summary: the test did not finish."
+            echo
+            grep -h -E '^\[(FAIL|SKIP)\]' "${log}" | sed 's/^/- /' || true
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       # Screenshots come out black on Xvfb with software OpenGL even when the
       # checks pass, so they are only useful on real displays.
@@ -83,6 +107,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ui-test-screenshots-${{ matrix.blender }}
+          name: ui-test-screenshots-${{ matrix.blender }}-${{ matrix.backend }}
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: ignore
