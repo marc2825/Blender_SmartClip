@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [2.0.1] - 2026-11-24
+
+### Fixed
+
+- Installing over 1.x and switching the add-on off and on without restarting Blender failed with an `ImportError`. (#23)
+- The tooltip of the panel-header checkbox named `Shift+G` even when the shortcut key had been changed. (#25)
+- The bug report form and SUPPORT.md used the 1.x setting names. (#25)
+
+### Changed
+
+- The release ZIP includes the license text (`smart_clipping/LICENSE`). (#24)
+
 ## [2.0.0] - 2026-11-24
 
 The interface is redesigned. Right click now cancels a move, and a snap point within reach is snapped onto exactly without holding a button; **Snap Behavior → Gradual Pull** brings back the 1.x pull.
