@@ -4,8 +4,11 @@
   <a href="https://github.com/marc2825/Blender_SmartClip/releases/latest"><img src="https://img.shields.io/badge/version-2.0.1-blue" alt="Version 2.0.1" align="middle"></a>
   <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&amp;logoColor=white" alt="Blender 4.0+" align="middle"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" align="middle"></a>
-  <br>
-  <a href="README.md">日本語</a> | <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/README-%E6%97%A5%E6%9C%AC%E8%AA%9E-555555?style=for-the-badge" alt="日本語のREADME"></a>
+  <a href="README.en.md"><img src="https://img.shields.io/badge/README-English-1f6feb?style=for-the-badge" alt="README in English"></a>
 </p>
 
 オブジェクトや頂点を移動するときに、近くの頂点へのガイド線を表示し、位置合わせ（スナップ）を手伝う Blender アドオンです。PowerPoint の[スマートガイド](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3)を参考にしています。
@@ -40,8 +43,10 @@
 
 ## 注意
 
-- スナップ先はメッシュの頂点だけです。移動を始めた時点の形状（モディファイア適用後）から作ります。
-- スナップ先の点の数は **スナップ点の上限**（初期値 50,000）までです。超えると、遠くのオブジェクトは頂点を間引くか、バウンディングボックスの角と原点だけになり、さらに遠いものは対象外になります。
+- スナップ先は、ふだんはメッシュの頂点です。移動を始めた時点の形状（モディファイア適用後。編集中のメッシュは適用前）から作ります。
+- 頂点に合わせるのは「動かしている点」です。オブジェクトモードではアクティブオブジェクトの原点、編集モードでは選択頂点の中心です。
+- スナップ点の数は **スナップ点の上限**（初期値 50,000）までです。超えると、遠くのオブジェクトは頂点を間引くか、頂点の代わりにバウンディングボックスの角と原点（代理点）だけになり、代理点にもスナップします。さらに遠いものは対象外になります。
+- 軸や面の拘束、位置のロック（Lock Location）などで頂点まで届かないときは、届く範囲でいちばん近い位置に動き、「投影」と表示します。
 - パネル見出しのチェックボックスをオフにしたシーンでは、ショートカットのキー（初期設定は `Shift+G`）が Blender 本来の機能（`Shift+G` なら「グループで選択」「類似選択」）に戻ります。
 
 ## 関連文書

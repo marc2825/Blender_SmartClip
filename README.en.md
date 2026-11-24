@@ -4,8 +4,11 @@
   <a href="https://github.com/marc2825/Blender_SmartClip/releases/latest"><img src="https://img.shields.io/badge/version-2.0.1-blue" alt="Version 2.0.1" align="middle"></a>
   <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&amp;logoColor=white" alt="Blender 4.0+" align="middle"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" align="middle"></a>
-  <br>
-  <a href="README.md">日本語</a> | <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/README-%E6%97%A5%E6%9C%AC%E8%AA%9E-1f6feb?style=for-the-badge" alt="日本語のREADME"></a>
+  <a href="README.en.md"><img src="https://img.shields.io/badge/README-English-555555?style=for-the-badge" alt="README in English"></a>
 </p>
 
 A Blender add-on that shows guide lines to nearby vertices while you move objects or vertices, and helps you snap to them. It is inspired by [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) in PowerPoint.
@@ -40,8 +43,10 @@ The full list of controls, what the viewport shows during a move, and the settin
 
 ## Notes
 
-- Only mesh vertices are snap targets, taken from the geometry (with modifiers) at the moment the move starts.
-- Snap points are limited to **Snap Point Limit** (default 50,000). Beyond it, distant objects are down-sampled or reduced to their bounding-box corners and origin, and the farthest are left out.
+- Snap targets are normally mesh vertices, taken from the geometry at the moment the move starts (with modifiers; a mesh in Edit Mode without them).
+- What lands on a vertex is the moving point: the active object's origin in Object Mode, the median of the selected vertices in Edit Mode.
+- Snap points are limited to **Snap Point Limit** (default 50,000). Beyond it, distant objects are down-sampled or reduced to stand-ins, their bounding-box corners and origin, which can be snapped to as well. The farthest are left out.
+- When an axis or plane constraint, Lock Location or an object constraint keeps the moving point off a vertex, it goes as close as it can and the label says "Projected".
 - With the checkbox in the panel header off, the shortcut key (`Shift+G` unless changed) goes back to what Blender assigns to it in that scene (Select Grouped / Select Similar for `Shift+G`).
 
 ## Documentation
