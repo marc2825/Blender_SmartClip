@@ -1709,6 +1709,9 @@ def case_translations():
             props(cls.bl_rna.properties)
         for cls in (smart_clipping.SMARTCLIP_PT_panel, smart_clipping.SMARTCLIP_PT_limits):
             want(cls.bl_label)
+        # Words left to Blender's catalog (status bar, mode lines, sections)
+        for word in i18n.BLENDER_WORDS:
+            want(word)
         assert not missing, missing
 
         # Words the add-on assembles itself

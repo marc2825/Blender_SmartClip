@@ -5,17 +5,30 @@ the messages registered here when the interface language is Japanese.  Text
 the add-on assembles itself (viewport labels, format strings) goes through
 ``iface`` / ``tip`` / ``rpt`` explicitly.
 
-Words Blender already translates (Snap To, Collection, Confirm, Cancel, Axis,
-Plane, Off, ...) are deliberately left out: messages registered here apply to
-the whole of Blender, so registering a common word would change it in
-Blender's own interface too.  tests/headless_test_runner.py checks that no
-message below collides with Blender's catalog.
+Words Blender already translates (BLENDER_WORDS) are deliberately left out:
+messages registered here apply to the whole of Blender, so registering a
+common word would change it in Blender's own interface too.  A word that only
+newer versions translate is registered with the same translation, which
+changes nothing where Blender has it.  tests/headless_test_runner.py checks
+that no message below collides with Blender's catalog and that every word in
+BLENDER_WORDS is translated by it.
 """
 
 import bpy
 
+# Words the add-on shows and leaves to Blender's own catalog (identical in
+# Blender 4.0 to 5.3).
+BLENDER_WORDS = (
+    "Snap To", "Selected Objects", "Visible Objects", "Collection", "Snapping",
+    "Object Mode", "Edit Mode", "Confirm", "Cancel", "Axis", "Plane", "Off", "Display",
+    "Advanced", "Offset",
+)
+
 # English message -> Japanese, default translation context ("*").
 MESSAGES = {
+    # Translated by Blender from 5.x only (same words there)
+    "Snap Distance": "スナップ距離",
+
     # Operator
     "Move with Guides": "ガイド付きで移動",
     "Move the selection with guide lines that snap to nearby vertices":
