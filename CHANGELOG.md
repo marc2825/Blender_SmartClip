@@ -6,13 +6,29 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+The interface is redesigned. Right click now cancels a move, and a snap point within reach is snapped onto exactly without holding a button; **Snap Behavior → Gradual Pull** brings back the 1.x pull.
+
 ### Added
 
-- **Advanced Settings → Snap Search** in the add-on preferences: an experimental **3D KD-tree** search next to the default **Screen-space Grid**. Both find the same candidates; the grid stays the default and was faster in almost every measured case (see `docs/DEVELOPMENT.md`). (#19)
+- Japanese interface. The panel, preferences, tooltips, status bar, viewport labels and messages follow **Preferences → Interface → Translation**.
+- The status bar lists the keys during a move.
+- During a move, `A` switches Align Only (Off → X → Y → Z) and `S` switches Snap To. The changes are kept when the move is confirmed and put back when it is cancelled.
+- Viewport labels during a move: next to the snap point, what it is and whether the move is snapped to it; next to the moving point, the distance moved in the scene's units and the constraint. A dashed ring shows the snap distance. The lower left shows Snap To, Align Only, and notes when there is nothing to snap to (with the reason), when a constraint pauses Align Only, and when the snap point limit is reached.
+- Snap point markers are hollow while pulled and filled once snapped, and their shape tells a vertex (circle), a bounding-box point (square) and a lined-up coordinate (diamond) apart.
+- **Move with Guides** in the Object and Mesh > Transform menus. When it cannot run, its tooltip says why.
+- The shortcut key for Object Mode and Edit Mode can be changed in the add-on preferences; **Reset Shortcut** sets `Shift+G` again.
+- **Advanced → Snap Search** in the add-on preferences: an experimental **3D KD-tree** search next to the default **Screen-space Grid**. Both find the same candidates; the grid stays the default and was faster in almost every measured case (see `docs/DEVELOPMENT.md`). (#19)
 
 ### Changed
 
-- The panel's Performance line reads `Snap points: N` instead of `Vertices in tree: N`, and ends with `[KD-tree]` when the KD-tree search is used.
+- Right click cancels a move, as in Blender's own transform. It used to hold the hard snap.
+- New preference **Snap Behavior**: **Snap Exactly** (default) lands exactly on a snap point within the snap distance, and holding `Ctrl` moves freely. **Gradual Pull** is the 1.x behavior, and holding `Ctrl` snaps exactly.
+- Align Only no longer falls back to snapping onto vertices when a constraint leaves none of its axes free to move; it pauses and says so.
+- Renamed: Target Scope → **Snap To** (Self Only, Selected, All Visible, Manual Collection → Same Mesh, Selected Objects, Visible Objects, Collection), Axis Align → **Align Only**, Snap Threshold → **Snap Distance**, Max Vertex Budget → **Snap Point Limit**, Hard Snap Color → **Snap Color**, Smart Clipping Move → **Move with Guides**, Add Default Hotkeys / Clear Hotkeys → **Use Shortcut** and **Reset Shortcut**. Saved settings and Python identifiers are unchanged.
+- Sidebar panel: the on/off checkbox moved into the panel header and greys the panel out; Move with Guides is at the top; Snap Distance is in the panel; Snap Behavior, Snap Point Limit and the colors are in the **Limits and Display** sub-panel. The Performance box is replaced by a warning shown only after a move that reached the snap point limit.
+- The lower-left HUD line is replaced by the labels above, drawn on a background in the theme's tooltip colors. Lines and markers follow the interface scale, and constraint axes use the theme's axis colors.
+- The add-on preferences are grouped into Snapping, Display, Shortcut and Advanced. The static list of modal keys is gone; the status bar shows them.
+- What the last move collected is kept in memory instead of the scene property `smartclip_runtime_info`, which was removed, so nothing about a move is saved into `.blend` files.
 
 ## [1.3.2] - 2026-11-21
 

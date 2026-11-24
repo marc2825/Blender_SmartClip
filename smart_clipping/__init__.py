@@ -4,7 +4,8 @@ bl_info = {
     "version": (1, 3, 2),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Smart Clipping",
-    "description": "Move with smart guides: vertex snapping, axis align and constraints",
+    "description": "Move with guide lines that snap to nearby vertices, line up coordinates "
+                   "and follow axis constraints",
     "doc_url": "https://github.com/marc2825/Blender_SmartClip",
     "tracker_url": "https://github.com/marc2825/Blender_SmartClip/issues",
     "category": "3D View",
@@ -12,132 +13,101 @@ bl_info = {
 
 import bpy
 from bpy.app.handlers import persistent
-from bpy.props import BoolProperty, EnumProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, PointerProperty
 
+from . import hud, i18n, keymap, ops
+from .keymap import _addon_keymaps  # noqa: F401  (tests inspect the registered items)
 from .ops import SMARTCLIP_OT_modal_move, remove_all_draw_handlers
 from .prefs import SMARTCLIP_AddonPreferences, get_addon_prefs
-from .utils import DEFAULT_VERTEX_BUDGET
+from .utils import SCOPE_ITEMS
 
-_SCOPE_ITEMS = [
-    ("SELF", "Self Only", "Snap only inside the active mesh"),
-    ("SELECTED", "Selected", "Snap to other selected mesh objects"),
-    ("VISIBLE", "All Visible", "Snap to all visible meshes (budget-controlled)"),
-    ("COLLECTION", "Manual Collection", "Snap only to a specific collection (incl. child collections)"),
-]
+# Kept for scripts that read it; the items live in utils.
+_SCOPE_ITEMS = SCOPE_ITEMS
 
 
 # ======================================================================
-# UI Panel
+# Sidebar panel
 # ======================================================================
 
-class SMARTCLIP_PT_panel(bpy.types.Panel):
-    bl_label = "Smart Clipping"
-    bl_idname = "SMARTCLIP_PT_panel"
+class _SidebarPanel:
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Tool"
 
+
+class SMARTCLIP_PT_panel(_SidebarPanel, bpy.types.Panel):
+    bl_label = "Smart Clipping"
+    bl_idname = "SMARTCLIP_PT_panel"
+
+    def draw_header(self, context):
+        self.layout.prop(context.scene, "smartclip_enabled", text="")
+
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+        layout.active = scene.smartclip_enabled
 
-        layout.prop(scene, "smartclip_enabled", text="Enable Smart Clipping")
-        layout.separator()
+        row = layout.row()
+        row.scale_y = 1.4
+        row.operator(SMARTCLIP_OT_modal_move.bl_idname, icon="SNAP_ON")
 
-        col = layout.column(align=True)
-        col.label(text="Target Scope:")
-        col.prop(scene, "smartclip_target_scope", text="")
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        col = layout.column()
+        col.prop(scene, "smartclip_target_scope")
         if scene.smartclip_target_scope == "COLLECTION":
-            col.separator()
-            col.prop(scene, "smartclip_target_collection", text="Collection")
-
-        layout.separator()
-        box = layout.box()
-        box.label(text="Axis Align:")
-        row = box.row(align=True)
+            col.prop(scene, "smartclip_target_collection")
+        row = col.row(align=True, heading="Align Only")
         row.prop(scene, "smartclip_align_x", toggle=True)
         row.prop(scene, "smartclip_align_y", toggle=True)
         row.prop(scene, "smartclip_align_z", toggle=True)
-
-        layout.separator()
-        box = layout.box()
-        box.label(text="Performance:")
         prefs = get_addon_prefs(context)
-        budget = prefs.max_vertex_budget if prefs else DEFAULT_VERTEX_BUDGET
-        box.label(text=f"Max Vertices: {budget}")
-        info = getattr(scene, "smartclip_runtime_info", "")
-        if info:
-            box.label(text=info)
+        if prefs is not None:
+            col.prop(prefs, "snap_distance_px")
 
-        layout.separator()
-        layout.operator(SMARTCLIP_OT_modal_move.bl_idname, icon="SNAP_ON")
-
-
-# ======================================================================
-# Keymap management
-# ======================================================================
-# The addon's Shift+G items are added at the head of their keymaps, so they
-# take precedence over the built-in Shift+G (Select Grouped / Select Similar).
-# Whether they are active is the user's choice (Add Default / Clear Hotkeys,
-# stored in the add-on preferences) and does not follow the per-scene
-# "Enable Smart Clipping" setting: the keymap is shared by all scenes, so the
-# operator's poll() checks the scene instead.  When it fails, the key press
-# falls through to Blender's own Shift+G.
-
-_addon_keymaps: list = []    # [(km, kmi), ...]
-_hotkeys_fallback = {"enabled": True}  # used when preferences are unavailable
+        info = ops.last_build(scene)
+        if info is not None and info.limit_exceeded:
+            col = layout.column(align=True)
+            col.use_property_split = False
+            col.label(text="Snap point limit reached", icon="ERROR")
+            col.label(text=hud.limit_detail(info.simplified, info.skipped), icon="BLANK1",
+                      translate=False)
 
 
-def _hotkeys_wanted() -> bool:
-    prefs = get_addon_prefs(bpy.context)
-    if prefs is not None:
-        return bool(prefs.hotkeys_enabled)
-    return _hotkeys_fallback["enabled"]
+class SMARTCLIP_PT_limits(_SidebarPanel, bpy.types.Panel):
+    bl_label = "Limits and Display"
+    bl_idname = "SMARTCLIP_PT_limits"
+    bl_parent_id = "SMARTCLIP_PT_panel"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        # Labels above the fields: a sub-panel's label column is too narrow
+        # for these names, in Japanese especially.
+        layout = self.layout
+        layout.active = context.scene.smartclip_enabled
+        prefs = get_addon_prefs(context)
+        if prefs is None:
+            layout.label(text="Add-on preferences are unavailable", icon="INFO")
+            return
+        col = layout.column()
+        col.label(text="Snap Behavior")
+        col.row().prop(prefs, "snap_behavior", expand=True)
+        col.separator()
+        col.prop(prefs, "max_vertex_budget")
+        col.separator()
+        row = col.row()
+        for prop in ("color_guide", "color_snap"):
+            sub = row.column(align=True)
+            sub.label(text=prefs.bl_rna.properties[prop].name)
+            sub.prop(prefs, prop, text="")
 
 
-def _set_hotkeys_wanted(enabled: bool):
-    _hotkeys_fallback["enabled"] = enabled
-    prefs = get_addon_prefs(bpy.context)
-    if prefs is not None:
-        prefs.hotkeys_enabled = enabled
-    for _km, kmi in _addon_keymaps:
-        try:
-            kmi.active = enabled
-        except (ReferenceError, RuntimeError):
-            pass
+def _menu_entry(self, _context):
+    self.layout.separator()
+    self.layout.operator(SMARTCLIP_OT_modal_move.bl_idname, icon="SNAP_ON")
 
 
-def _register_keymaps():
-    """Create keymap entries for Object and Edit modes."""
-    wm = getattr(bpy.context, "window_manager", None)
-    if not wm:
-        return
-    kc = wm.keyconfigs.addon
-    if not kc:
-        return
-    if _addon_keymaps:
-        return  # already registered
-
-    for km_name in ("Object Mode", "Mesh"):
-        km = kc.keymaps.new(name=km_name, space_type="EMPTY", region_type="WINDOW")
-        kmi = km.keymap_items.new(
-            SMARTCLIP_OT_modal_move.bl_idname,
-            type="G",
-            value="PRESS",
-            shift=True,
-            head=True,
-        )
-        kmi.active = _hotkeys_wanted()
-        _addon_keymaps.append((km, kmi))
-
-
-def _unregister_keymaps():
-    for km, kmi in _addon_keymaps:
-        try:
-            km.keymap_items.remove(kmi)
-        except (ReferenceError, RuntimeError):
-            pass
-    _addon_keymaps.clear()
+_MENUS = ("VIEW3D_MT_transform_object", "VIEW3D_MT_transform")
 
 
 # ======================================================================
@@ -167,7 +137,7 @@ def _legacy_value(scene, name):
 
 def migrate_legacy_scene_properties():
     """Copy pre-1.2 scene settings into the prefixed properties (once)."""
-    identifiers = [item[0] for item in _SCOPE_ITEMS]
+    identifiers = [item[0] for item in SCOPE_ITEMS]
     for scene in bpy.data.scenes:
         for old, new in _LEGACY_SCENE_PROPS.items():
             if scene.is_property_set(new):
@@ -197,34 +167,27 @@ def _deferred_init():
 
 
 # ======================================================================
-# Hotkey helper operators (shown in addon preferences)
+# Shortcut operators (add-on preferences, scripts)
 # ======================================================================
 
 class SMARTCLIP_OT_add_default_hotkeys(bpy.types.Operator):
     bl_idname = "smartclip.add_default_hotkeys"
-    bl_label = "Add Default Hotkeys"
-    bl_description = "Set Shift+G for Object Mode and Mesh Edit Mode"
+    bl_label = "Reset Shortcut"
+    bl_description = ("Set the shortcut back to Shift+G in Object Mode and mesh Edit Mode "
+                      "and turn it on")
 
     def execute(self, _context):
-        if not _addon_keymaps:
-            _register_keymaps()
-        for _km, kmi in _addon_keymaps:
-            kmi.type = "G"
-            kmi.value = "PRESS"
-            kmi.shift = True
-            kmi.ctrl = False
-            kmi.alt = False
-        _set_hotkeys_wanted(True)
+        keymap.reset_to_default()
         return {"FINISHED"}
 
 
 class SMARTCLIP_OT_clear_hotkeys(bpy.types.Operator):
     bl_idname = "smartclip.clear_hotkeys"
-    bl_label = "Clear Hotkeys"
-    bl_description = "Deactivate the Smart Clipping hotkeys until Add Default Hotkeys is used"
+    bl_label = "Turn Off Shortcut"
+    bl_description = "Turn off the shortcut so the key does what Blender assigns to it"
 
     def execute(self, _context):
-        _set_hotkeys_wanted(False)
+        keymap.set_hotkeys_wanted(False)
         return {"FINISHED"}
 
 
@@ -238,58 +201,59 @@ _classes = (
     SMARTCLIP_OT_clear_hotkeys,
     SMARTCLIP_OT_modal_move,
     SMARTCLIP_PT_panel,
+    SMARTCLIP_PT_limits,
 )
 
 _SCENE_PROPS = (
     "smartclip_enabled",
     "smartclip_target_scope",
     "smartclip_target_collection",
-    "smartclip_runtime_info",
     "smartclip_align_x",
     "smartclip_align_y",
     "smartclip_align_z",
 )
 
 
+def _align_description(axis):
+    return (f"Line up the {axis} coordinate with nearby vertices instead of snapping onto "
+            f"them. Press A while moving to switch")
+
+
 def register():
+    i18n.register()
     for cls in _classes:
         bpy.utils.register_class(cls)
 
     bpy.types.Scene.smartclip_enabled = BoolProperty(
         name="Enable Smart Clipping",
-        description="Use Smart Clipping in this scene; when off, Shift+G does Blender's default",
+        description=("Use Smart Clipping in this scene. When off, Shift+G does Blender's "
+                     "Select Grouped or Select Similar"),
         default=True,
     )
     bpy.types.Scene.smartclip_target_scope = EnumProperty(
-        name="Target Scope",
-        items=_SCOPE_ITEMS,
+        name="Snap To",
+        description="Which meshes the move snaps to. Press S while moving to switch",
+        items=SCOPE_ITEMS,
         default="VISIBLE",
     )
     bpy.types.Scene.smartclip_target_collection = PointerProperty(
-        name="Target Collection",
+        name="Collection",
+        description="Collection to snap to, including its child collections",
         type=bpy.types.Collection,
     )
-    bpy.types.Scene.smartclip_runtime_info = StringProperty(
-        name="Runtime Info",
-        default="",
-    )
     bpy.types.Scene.smartclip_align_x = BoolProperty(
-        name="X",
-        description="Axis-clipping: align to reference vertices' X coordinate",
-        default=False,
-    )
+        name="X", description=_align_description("X"), default=False)
     bpy.types.Scene.smartclip_align_y = BoolProperty(
-        name="Y",
-        description="Axis-clipping: align to reference vertices' Y coordinate",
-        default=False,
-    )
+        name="Y", description=_align_description("Y"), default=False)
     bpy.types.Scene.smartclip_align_z = BoolProperty(
-        name="Z",
-        description="Axis-clipping: align to reference vertices' Z coordinate",
-        default=False,
-    )
+        name="Z", description=_align_description("Z"), default=False)
 
-    _register_keymaps()
+    for name in _MENUS:
+        menu = getattr(bpy.types, name, None)
+        if menu is not None:
+            menu.append(_menu_entry)
+
+    keymap.register_keymaps()
     if _on_load_post not in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(_on_load_post)
     bpy.app.timers.register(_deferred_init, first_interval=0.0)
@@ -301,7 +265,15 @@ def unregister():
     if _on_load_post in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(_on_load_post)
     remove_all_draw_handlers()
-    _unregister_keymaps()
+    keymap.unregister_keymaps()
+
+    for name in _MENUS:
+        menu = getattr(bpy.types, name, None)
+        if menu is not None:
+            try:
+                menu.remove(_menu_entry)
+            except (ValueError, RuntimeError):
+                pass
 
     for p in reversed(_SCENE_PROPS):
         if hasattr(bpy.types.Scene, p):
@@ -309,3 +281,4 @@ def unregister():
 
     for cls in reversed(_classes):
         bpy.utils.unregister_class(cls)
+    i18n.unregister()

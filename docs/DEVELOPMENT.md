@@ -6,11 +6,14 @@ This guide is for working on the add-on itself. For installing and using it, see
 
 | Path | Contents |
 |---|---|
-| `smart_clipping/ops.py` | The modal move operator: what moves, input handling, snapping |
-| `smart_clipping/detector.py` | Collecting snap points and searching them: a screen-space grid (default) or a 3D KD-tree (Advanced Settings), which return the same candidates |
-| `smart_clipping/drawing.py` | Guide lines and HUD |
-| `smart_clipping/prefs.py`, `utils.py` | Preferences and shared helpers |
-| `smart_clipping/__init__.py` | `bl_info`, panel, keymaps, scene properties and their migration |
+| `smart_clipping/ops.py` | The modal move operator: what moves, input handling, snapping, the status bar |
+| `smart_clipping/detector.py` | Collecting snap points and searching them: a screen-space grid (default) or a 3D KD-tree (Advanced), which return the same candidates |
+| `smart_clipping/drawing.py` | Viewport overlay: guide lines, markers, labels, the snap distance ring, the mode lines |
+| `smart_clipping/hud.py` | The words shown during a move (labels, mode lines, status bar), kept apart from drawing so they can be tested |
+| `smart_clipping/i18n.py` | Japanese translation of the interface |
+| `smart_clipping/keymap.py` | The `Shift+G` keymap items and Use Shortcut |
+| `smart_clipping/prefs.py`, `utils.py` | Preferences, shared helpers, and the move's decisions (the A / S cycles, what Ctrl does) as plain functions |
+| `smart_clipping/__init__.py` | `bl_info`, panels, menu entries, scene properties and their migration |
 | `tests/` | Headless tests, the UI test, and a scene for manual checks |
 | `scripts/` | Version check and release packaging (plain Python 3, no Blender needed) |
 
@@ -18,7 +21,7 @@ This guide is for working on the add-on itself. For installing and using it, see
 
 ### Headless
 
-Covers snap point collection, candidate search with both backends (they must return identical candidate lists), and the operator's `execute` without a window. CI runs it on every pull request.
+Covers snap point collection, candidate search with both backends (they must return identical candidate lists), the operator's `execute` without a window, the move's decisions and words, and the translation (see [Translation](#translation)). CI runs it on every pull request.
 
 ```sh
 blender --background --factory-startup --python tests/headless_test_runner.py
@@ -29,7 +32,7 @@ Case names are the keys of `CASES` in the runner. It exits with status 1 if any 
 
 ### UI
 
-The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+G`, mouse moves, constraint keys, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, hard snap, and Edit Mode.
+The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+G`, mouse moves, constraint keys, `Ctrl`, `A`, `S`, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, exact snapping, `Ctrl`, right click cancelling, the `A` / `S` switches and their undo on cancel, the status bar, and Edit Mode. It keeps the sidebar open with the panels in the Item tab, so drawing errors in them fail the run.
 
 ```sh
 blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
@@ -38,6 +41,7 @@ blender --factory-startup --enable-event-simulate --python tests/ui_operator_tes
 - It needs a display, and real mouse and keyboard input is ignored while it runs.
 - Set `SMARTCLIP_UI_SCREENSHOT_DIR` to a folder to save screenshots of the overlays.
 - Set `SMARTCLIP_UI_BACKEND=KDTREE` to run the checks with the KD-tree search instead of the default grid.
+- Set `SMARTCLIP_UI_LANGUAGE=ja_JP` to run them with the interface in Japanese.
 
 ### Manual
 
@@ -49,9 +53,15 @@ How snapping feels is still worth checking by hand after UI changes. `tests/manu
 blender --python tests/manual_ui_setup.py
 ```
 
+### Translation
+
+`smart_clipping/i18n.py` holds the Japanese messages, keyed by the English text used in the code. Blender looks names, tooltips and enum items up there by itself; text the add-on builds (viewport labels, format strings, reports) goes through `i18n.iface` / `tip` / `rpt`.
+
+Registered messages apply to all of Blender, so a word Blender already translates (Snap To, Collection, Confirm, Axis, Off, ...) is not registered: the add-on uses Blender's own translation. The headless case `translations` checks that no message gives one of Blender's a different translation, that format placeholders match, and that every name and tooltip the add-on registers comes out in Japanese. When you add or change a label, add its message there. A long Japanese label is cut off in the sidebar's label column, so check new labels at the default sidebar width.
+
 ### Release ZIP
 
-`tests/install_zip_test.py` installs a packaged ZIP the way a user would and checks that it enables, registers, keeps a cleared hotkey off, and disables cleanly. It refuses to run unless the user folders point somewhere disposable:
+`tests/install_zip_test.py` installs a packaged ZIP the way a user would and checks that it enables, registers, keeps a cleared hotkey off, keeps a changed key through Use Shortcut off and on, resets it with Reset Shortcut, and disables cleanly. It refuses to run unless the user folders point somewhere disposable:
 
 ```sh
 python scripts/package_addon.py --output-dir /tmp/dist

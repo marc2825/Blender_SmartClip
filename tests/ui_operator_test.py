@@ -7,10 +7,11 @@ Usage:
   blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
 
 Set SMARTCLIP_UI_SCREENSHOT_DIR to save screenshots of the overlays
-(constraint.png, hard_snap.png) for visual inspection, SMARTCLIP_UI_STEP
-to wait longer between simulated events on slow (software) OpenGL, and
-SMARTCLIP_UI_BACKEND=KDTREE to run the checks with the experimental KD-tree
-snap search instead of the default screen-space grid.
+(constraint.png, snap.png, align.png) for visual inspection,
+SMARTCLIP_UI_STEP to wait longer between simulated events on slow (software)
+OpenGL, SMARTCLIP_UI_BACKEND=KDTREE to run the checks with the experimental
+KD-tree snap search instead of the default screen-space grid, and
+SMARTCLIP_UI_LANGUAGE=ja_JP to run them with the interface in Japanese.
 
 Exit code 0 = all checks passed, 1 = failures.
 """
@@ -37,6 +38,8 @@ import smart_clipping  # noqa: E402
 STEP = float(os.environ.get("SMARTCLIP_UI_STEP", "0.15"))
 # Snap search backend (smart_clipping.utils.SEARCH_BACKENDS); empty = default.
 BACKEND = os.environ.get("SMARTCLIP_UI_BACKEND", "").strip().upper()
+# Interface language, e.g. ja_JP; empty = Blender's default (English).
+LANGUAGE = os.environ.get("SMARTCLIP_UI_LANGUAGE", "").strip()
 
 _results = []
 _TEE = None
@@ -82,6 +85,33 @@ def _view3d():
     raise RuntimeError("no 3D View in the startup screen")
 
 
+def _running():
+    return bool(smart_clipping.ops._running_moves)
+
+
+def _status_bar_taken():
+    """Whether a move's keys replace the status bar (WorkSpace.status_text_set)."""
+    from bl_ui.space_statusbar import STATUSBAR_HT_header
+    original = getattr(STATUSBAR_HT_header, "_draw_orig", None)
+    return original is not None and STATUSBAR_HT_header.draw is not original
+
+
+def _show_sidebar(area):
+    """Open the sidebar with the add-on's panels drawn for the whole test.
+
+    The sidebar opens on its Item tab, which scripts cannot switch, so the
+    panels are registered again in that tab, with the sub-panel open.
+    """
+    panel, limits = smart_clipping.SMARTCLIP_PT_panel, smart_clipping.SMARTCLIP_PT_limits
+    bpy.utils.unregister_class(limits)
+    bpy.utils.unregister_class(panel)
+    panel.bl_category = limits.bl_category = "Item"
+    limits.bl_options = set()
+    bpy.utils.register_class(panel)
+    bpy.utils.register_class(limits)
+    area.spaces.active.show_region_ui = True
+
+
 def _setup_scene():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj)
@@ -118,7 +148,8 @@ def _steps():
     win, area, region, rv3d = _view3d()
     print(f"[ui:test] Blender {bpy.app.version_string}, window {win.width}x{win.height}, "
           f"3D view region {region.width}x{region.height} at ({region.x}, {region.y}), "
-          f"step {STEP}s, search {BACKEND or 'default'}", flush=True)
+          f"step {STEP}s, search {BACKEND or 'default'}, language {LANGUAGE or 'default'}",
+          flush=True)
     scene = bpy.context.scene
     scene.smartclip_enabled = True
     scene.smartclip_target_scope = "SELF"  # Object Mode + SELF = no snap targets
@@ -132,6 +163,7 @@ def _steps():
     rv3d.view_distance = 12.0
     rv3d.view_rotation = Euler((1.1, 0.0, 0.6)).to_quaternion()
     rv3d.update()
+    _show_sidebar(area)
     yield 0.5
 
     cx = region.x + region.width // 2
@@ -144,12 +176,10 @@ def _steps():
         return location_3d_to_region_2d(region, rv3d, co)
 
     def start_modal(label):
-        scene.smartclip_runtime_info = ""
         ev("G", "PRESS", shift=True)
         ev("G", "RELEASE", shift=True)
         yield STEP
-        check(f"{label}:modal_started", scene.smartclip_runtime_info != "",
-              repr(scene.smartclip_runtime_info))
+        check(f"{label}:modal_started", _running())
 
     def world():
         return child.matrix_world.translation.copy()
@@ -185,9 +215,22 @@ def _steps():
     offset = px(world()) - start_px
     check("parented_follows_mouse", (offset - Vector((120.0, 0.0))).length < 3.0,
           f"screen offset {tuple(round(v, 1) for v in offset)}")
+    check("status_bar_shows_keys", _status_bar_taken())
     ev("ESC", "PRESS")
     yield STEP
     check("esc_restores_location", (child.location - start_loc).length < 1e-6)
+    check("status_bar_given_back", not _status_bar_taken())
+
+    # RMB cancels too, as in Blender's own transform
+    yield from start_modal("rmb_cancel")
+    ev("MOUSEMOVE", "NOTHING", dx=90, dy=30)
+    yield STEP
+    moved_away = (world() - start_world).length
+    ev("RIGHTMOUSE", "PRESS")
+    ev("RIGHTMOUSE", "RELEASE")
+    yield STEP
+    check("rmb_cancels", moved_away > 1e-3 and not _running()
+          and (child.location - start_loc).length < 1e-6, f"moved {moved_away:.3f}")
 
     # 2. Orbiting mid-move must not make the object jump
     yield from start_modal("orbit")
@@ -249,19 +292,21 @@ def _steps():
     yield STEP
 
     # An internal error mid-move restores the selection and cleans up
+    # (snap_rule runs on every mouse move, whether or not there is anything
+    # to snap to)
     mark = len(_TEE.captured)
-    original_find = smart_clipping.detector.find_candidates
+    original_rule = smart_clipping.ops.snap_rule
 
-    def failing_find(*_args, **_kwargs):
+    def failing_rule(*_args, **_kwargs):
         raise RuntimeError("injected failure")
 
-    smart_clipping.detector.find_candidates = failing_find
+    smart_clipping.ops.snap_rule = failing_rule
     try:
         yield from start_modal("error")
         ev("MOUSEMOVE", "NOTHING", dx=40, dy=10)
         yield STEP
     finally:
-        smart_clipping.detector.find_candidates = original_find
+        smart_clipping.ops.snap_rule = original_rule
     injected = "".join(_TEE.captured[mark:])
     del _TEE.captured[mark:]
     check("error_reported", "injected failure" in injected)
@@ -293,11 +338,10 @@ def _steps():
         check("enabled_takes_precedence", SMARTCLIP_TEST_OT_probe.calls == 0)
 
         scene.smartclip_enabled = False
-        scene.smartclip_runtime_info = ""
         ev("G", "PRESS", shift=True)
         ev("G", "RELEASE", shift=True)
         yield STEP
-        check("disabled_does_not_start", scene.smartclip_runtime_info == "")
+        check("disabled_does_not_start", not _running())
         check("disabled_falls_through", SMARTCLIP_TEST_OT_probe.calls == 1,
               str(SMARTCLIP_TEST_OT_probe.calls))
         check("disabled_keeps_keymap_item",
@@ -429,25 +473,86 @@ def _steps():
     rv3d.update()
     yield STEP
 
-    # 4. Hard snap (hold RMB) lands exactly on a target vertex
+    # 4. Snap Exactly: a few pixels off a vertex lands exactly on it, no
+    #    button needed; holding Ctrl moves freely; RMB cancels
     scene.smartclip_target_scope = "VISIBLE"
     vertex = target.matrix_world @ target.data.vertices[0].co
     to_vertex = px(vertex) - px(start_world)
-    yield from start_modal("hard_snap")
-    check("hard_snap:search_backend",
-          ("[KD-tree]" in scene.smartclip_runtime_info) == (BACKEND == "KDTREE"),
-          repr(scene.smartclip_runtime_info))
-    ev("MOUSEMOVE", "NOTHING", dx=round(to_vertex.x), dy=round(to_vertex.y))
+    yield from start_modal("snap")
+    build = smart_clipping.ops.last_build(scene)
+    check("snap:search_backend",
+          build is not None and build.backend == (BACKEND or smart_clipping.utils.SEARCH_GRID),
+          repr(build))
+    near = dict(dx=round(to_vertex.x) + 3, dy=round(to_vertex.y) - 2)
+    ev("MOUSEMOVE", "NOTHING", **near)
     yield STEP
-    ev("RIGHTMOUSE", "PRESS")
-    yield STEP
-    check("hard_snap_on_vertex", (world() - vertex).length < 1e-4,
+    check("snaps_exactly_on_vertex", (world() - vertex).length < 1e-4,
           f"off by {(world() - vertex).length:.4f}")
-    screenshot("hard_snap.png")
+    screenshot("snap.png")
+    ev("LEFT_CTRL", "PRESS", ctrl=True, **near)
+    ev("MOUSEMOVE", "NOTHING", ctrl=True, **near)
+    yield STEP
+    check("ctrl_moves_freely", (world() - vertex).length > 1e-3,
+          f"off by {(world() - vertex).length:.4f}")
+    ev("LEFT_CTRL", "RELEASE", **near)
+    ev("MOUSEMOVE", "NOTHING", **near)
+    yield STEP
+    check("ctrl_release_snaps_again", (world() - vertex).length < 1e-4)
+    ev("RIGHTMOUSE", "PRESS")
     ev("RIGHTMOUSE", "RELEASE")
+    yield STEP
+    check("rmb_after_snap_restores", not _running()
+          and (child.location - start_loc).length < 1e-6)
+
+    # A cycles Align Only (Off -> X -> Y); Esc puts it back, LMB keeps it
+    yield from start_modal("align_key")
+    for _ in range(2):
+        ev("A", "PRESS")
+        ev("A", "RELEASE")
+    ev("MOUSEMOVE", "NOTHING", dx=40, dy=25)
+    yield STEP
+    check("a_cycles_align_only",
+          (scene.smartclip_align_x, scene.smartclip_align_y, scene.smartclip_align_z)
+          == (False, True, False))
+    screenshot("align.png")
     ev("ESC", "PRESS")
     yield STEP
-    check("esc_after_snap_restores", (child.location - start_loc).length < 1e-6)
+    check("esc_restores_align_only",
+          not (scene.smartclip_align_x or scene.smartclip_align_y or scene.smartclip_align_z))
+    yield from start_modal("align_key_confirm")
+    ev("A", "PRESS")
+    ev("A", "RELEASE")
+    ev("MOUSEMOVE", "NOTHING", dx=40, dy=25)
+    yield STEP
+    ev("LEFTMOUSE", "PRESS")
+    ev("LEFTMOUSE", "RELEASE")
+    yield STEP
+    check("confirm_keeps_align_only", scene.smartclip_align_x and not scene.smartclip_align_y)
+    scene.smartclip_align_x = False
+    child.location = start_loc
+    bpy.context.view_layer.update()
+    yield STEP
+
+    # S cycles Snap To and collects the snap points again
+    coll = bpy.data.collections.new("UI_Snap_Collection")
+    scene.collection.children.link(coll)
+    coll.objects.link(target)
+    scene.smartclip_target_collection = coll
+    yield from start_modal("snap_to_key")
+    ev("S", "PRESS")
+    ev("S", "RELEASE")
+    ev("MOUSEMOVE", "NOTHING", dx=20)
+    yield STEP
+    build = smart_clipping.ops.last_build(scene)
+    check("s_cycles_snap_to", scene.smartclip_target_scope == "COLLECTION"
+          and build is not None and build.points == len(target.data.vertices), repr(build))
+    ev("ESC", "PRESS")
+    yield STEP
+    check("esc_restores_snap_to", scene.smartclip_target_scope == "VISIBLE")
+    scene.smartclip_target_collection = None
+    bpy.data.collections.remove(coll)
+    bpy.context.view_layer.update()
+    yield STEP
 
     # 5. Edit Mode: move one vertex, ESC restores it
     scene.smartclip_target_scope = "SELF"
@@ -547,6 +652,11 @@ def main():
     sys.stderr = tee
     if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
         smart_clipping.register()
+    if LANGUAGE:
+        view = bpy.context.preferences.view
+        view.language = LANGUAGE
+        view.use_translate_interface = True
+        view.use_translate_tooltips = True
     if BACKEND:
         # Registered by path, the add-on has no stored preferences: hand the
         # snap point collection the requested backend directly.

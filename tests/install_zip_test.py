@@ -31,9 +31,11 @@ def main():
         return 2
 
     failures = []
+    checked = []
 
     def check(name, cond, detail=""):
         print(f"[{'PASS' if cond else 'FAIL'}] {name} {detail}".rstrip(), flush=True)
+        checked.append(name)
         if not cond:
             failures.append(name)
 
@@ -76,10 +78,37 @@ def main():
     bpy.ops.smartclip.add_default_hotkeys()
     check("default_hotkey_restored", prefs.hotkeys_enabled and all(k.active for k in addon_items()))
 
+    # Use Shortcut (the preference) and a key changed in the user keymap, as
+    # the preferences' key field does it.  Without a window Blender merges
+    # the keymaps only when asked to.
+    keyconfigs = bpy.context.window_manager.keyconfigs
+
+    def user_object_mode_item():
+        keyconfigs.update()
+        items = module.keymap.user_items()
+        return items[0][2] if items else None
+
+    kmi = user_object_mode_item()
+    if kmi is not None:
+        kmi.type = "F"
+        keyconfigs.update()     # what the event loop does after an edit in the window
+    prefs.hotkeys_enabled = False
+    kmi = user_object_mode_item()
+    check("use_shortcut_off", kmi is not None and not kmi.active
+          and not any(k.active for k in addon_items()))
+    prefs.hotkeys_enabled = True
+    kmi = user_object_mode_item()
+    check("use_shortcut_on_keeps_custom_key", kmi is not None and kmi.active and kmi.type == "F",
+          f"{kmi.type if kmi else None}")
+    bpy.ops.smartclip.add_default_hotkeys()
+    kmi = user_object_mode_item()
+    check("reset_shortcut_restores_shift_g", kmi is not None and kmi.active and kmi.type == "G"
+          and kmi.shift and not kmi.is_user_modified)
+
     bpy.ops.preferences.addon_disable(module=MODULE)
     check("disabled_cleanly", not hasattr(bpy.types.Scene, "smartclip_target_scope"))
 
-    print(f"[install:test] summary: passed={10 - len(failures)} failed={len(failures)}")
+    print(f"[install:test] summary: passed={len(checked) - len(failures)} failed={len(failures)}")
     return 1 if failures else 0
 
 

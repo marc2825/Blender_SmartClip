@@ -12,6 +12,31 @@ SEARCH_KDTREE = "KDTREE"
 SEARCH_BACKENDS = (SEARCH_GRID, SEARCH_KDTREE)
 DEFAULT_SEARCH_BACKEND = SEARCH_GRID
 
+# What happens when a snap point is within the snap distance (preferences).
+SNAP_EXACT = "EXACT"   # jump onto it; Ctrl held = no snapping
+SNAP_PULL = "PULL"     # pull towards it (the behavior up to 1.3); Ctrl held = exact
+DEFAULT_SNAP_BEHAVIOR = SNAP_EXACT
+
+# Snap state of the move at the moment (drawing and labels).
+STATE_NONE = "NONE"        # snapping on, no snap point within reach
+STATE_FREE = "FREE"        # snapping switched off by holding Ctrl
+STATE_PULLING = "PULLING"  # pulled towards a snap point (Gradual Pull)
+STATE_SNAPPED = "SNAPPED"  # exactly on a snap point (or its constrained projection)
+
+# Snap To (scene setting).  The identifiers are stored in .blend files.
+SCOPE_ITEMS = [
+    ("SELF", "Same Mesh",
+     "Snap to other vertices of the meshes being edited (Edit Mode)"),
+    ("SELECTED", "Selected Objects",
+     "Snap to the other selected meshes. In Object Mode only the active object moves"),
+    ("VISIBLE", "Visible Objects",
+     "Snap to every visible mesh, nearest first, up to the snap point limit"),
+    ("COLLECTION", "Collection",
+     "Snap to the visible meshes in a collection and its child collections"),
+]
+SCOPE_ORDER = tuple(item[0] for item in SCOPE_ITEMS)
+SCOPE_NAMES = {item[0]: item[1] for item in SCOPE_ITEMS}
+
 _AXIS_INDEX = {"X": 0, "Y": 1, "Z": 2}
 
 
@@ -91,3 +116,63 @@ def apply_constraint(movement: Vector, mode: "str | None") -> Vector:
 
 def clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+# ----------------------------------------------------------------------
+# Decisions of the move, kept free of bpy state so they can be tested
+# ----------------------------------------------------------------------
+
+_ALIGN_CYCLE = ((), ("X",), ("Y",), ("Z",))
+
+
+def next_align_axes(axes) -> tuple:
+    """Align Only after pressing A: Off -> X -> Y -> Z -> Off.
+
+    Several axes (set in the panel) go back to Off.
+    """
+    current = tuple(sorted(axes))
+    if current not in _ALIGN_CYCLE:
+        return ()
+    return _ALIGN_CYCLE[(_ALIGN_CYCLE.index(current) + 1) % len(_ALIGN_CYCLE)]
+
+
+def scope_available(scope, is_edit, has_collection, has_other_selected) -> bool:
+    """Whether Snap To *scope* can have anything to snap to during this move.
+
+    Object Mode moves whole objects, which never snap to themselves, so Same
+    Mesh has nothing there; Selected Objects needs a selected mesh that is not
+    moving.  Collection needs a collection.
+    """
+    if scope == "SELF":
+        return is_edit
+    if scope == "SELECTED":
+        return is_edit or has_other_selected
+    if scope == "COLLECTION":
+        return has_collection
+    return scope in SCOPE_ORDER
+
+
+def next_scope(current, is_edit, has_collection, has_other_selected) -> str:
+    """Snap To after pressing S: the next available scope in SCOPE_ORDER."""
+    start = SCOPE_ORDER.index(current) if current in SCOPE_ORDER else -1
+    for step in range(1, len(SCOPE_ORDER) + 1):
+        scope = SCOPE_ORDER[(start + step) % len(SCOPE_ORDER)]
+        if scope_available(scope, is_edit, has_collection, has_other_selected):
+            return scope
+    return current
+
+
+def snap_rule(behavior, ctrl_held) -> tuple:
+    """``(search, exact)``: look for a snap point at all, and land on it exactly.
+
+    Snap Exactly: snaps onto the point; Ctrl held moves freely.
+    Gradual Pull: pulls towards the point; Ctrl held snaps exactly.
+    """
+    if behavior == SNAP_PULL:
+        return True, bool(ctrl_held)
+    return not ctrl_held, True
+
+
+def pull_ratio(screen_dist, threshold_px, strength) -> float:
+    """Share of the way to a snap point that Gradual Pull moves (0..strength)."""
+    return clamp01(1.0 - screen_dist / max(1.0, threshold_px)) * strength

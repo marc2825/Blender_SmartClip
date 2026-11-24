@@ -20,25 +20,29 @@ A Blender add-on that shows guide lines to nearby vertices while you move object
 
 Download `smart_clipping-vX.Y.Z.zip` from [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) and load it with **Preferences → Add-ons → Install from Disk** (**Install** on 4.1 and older). Do not unzip it.
 
-When upgrading from 1.1.x or earlier, disable and remove the old version (module `src`) first; enabling both makes their registrations collide. Add-on preferences start from their defaults, while Target Scope and other settings saved in `.blend` files carry over.
+When upgrading from 1.1.x or earlier, disable and remove the old version (module `src`) first; enabling both makes their registrations collide. Add-on preferences start from their defaults, while Snap To and other settings saved in `.blend` files carry over.
+
+From 2.0, right click cancels a move, and a vertex within reach is snapped onto exactly without holding a button. To get the gradual pull of 1.x back, set **Snap Behavior** to **Gradual Pull** (sidebar panel > Limits and Display, or the add-on preferences).
 
 ## Usage
 
 1. In the 3D Viewport, press N and open the **Smart Clipping** panel in the **Tool** tab.
-2. Choose which meshes to snap to with **Target Scope**. The default is every visible mesh.
-3. Press `Shift+G` in Object Mode or mesh Edit Mode to start moving.
-4. Close to a candidate vertex, the selection is pulled toward it. While the right mouse button is held, it sits exactly on the candidate.
-5. Confirm with left click or `Enter`, cancel with `Esc`. After confirming, correct the move numerically in the **Adjust Last Operation** panel.
+2. Choose which meshes to snap to with **Snap To**. The default is every visible mesh (Visible Objects).
+3. Press `Shift+G` in Object Mode or mesh Edit Mode to start moving. **Move with Guides** in the panel or in the Object / Mesh > Transform menu does the same.
+4. When the moving point comes within reach of a vertex (the dashed ring), it snaps onto it. Hold `Ctrl` to move freely.
+5. Confirm with left click or `Enter`; cancel with right click or `Esc`. After confirming, correct the move numerically in the **Adjust Last Operation** panel.
 
-While moving, `X` `Y` `Z` constrain to an axis and `Shift` + the key to a plane. With **Axis Align** on in the panel, only coordinate values are aligned instead of vertex positions.
+While moving, `X` `Y` `Z` constrain to an axis and `Shift` + the key to a plane. `A` switches **Align Only**, which lines up one coordinate with nearby vertices instead of snapping onto them, and `S` switches **Snap To**. The status bar lists these keys during a move.
 
-The full list of controls, how to choose Target Scope, and the preferences are in the [guide](docs/details.en.md).
+The interface is in English and Japanese, following **Preferences → Interface → Translation**.
+
+The full list of controls, what the viewport shows during a move, and the settings are in the [guide](docs/details.en.md).
 
 ## Notes
 
 - Only mesh vertices are snap targets, taken from the geometry (with modifiers) at the moment the move starts.
-- Snap points are limited to **Max Vertex Budget** (default 50,000). Beyond it, distant objects are down-sampled or reduced to their bounding-box corners and origin, and the farthest are left out.
-- With **Enable Smart Clipping** off, `Shift+G` goes back to Blender's Select Grouped / Select Similar.
+- Snap points are limited to **Snap Point Limit** (default 50,000). Beyond it, distant objects are down-sampled or reduced to their bounding-box corners and origin, and the farthest are left out.
+- With the checkbox in the panel header off, `Shift+G` goes back to Blender's Select Grouped / Select Similar in that scene.
 
 ## Documentation
 

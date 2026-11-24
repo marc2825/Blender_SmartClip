@@ -133,7 +133,8 @@ def case_scene_properties_registered():
     assert not hasattr(bpy.types.Scene, "target_collection")
     assert hasattr(bpy.types.Scene, "smartclip_target_scope")
     assert hasattr(bpy.types.Scene, "smartclip_target_collection")
-    assert hasattr(bpy.types.Scene, "smartclip_runtime_info")
+    # The last move's summary is kept in memory, not saved into files (2.0)
+    assert not hasattr(bpy.types.Scene, "smartclip_runtime_info")
     assert hasattr(bpy.types.Scene, "smartclip_align_x")
     assert hasattr(bpy.types.Scene, "smartclip_align_y")
     assert hasattr(bpy.types.Scene, "smartclip_align_z")
@@ -1445,8 +1446,8 @@ def case_search_backend_setting():
     assert np.array_equal(kd.coords, grid.coords) and np.array_equal(kd.is_bounds, grid.is_bounds)
     # The KD-tree is built while the move starts, not on the first mouse move.
     assert "kdtree" in kd._cache and "kdtree" not in grid._cache
-    assert ops._runtime_info(kd).endswith("[KD-tree]"), ops._runtime_info(kd)
-    assert "KD-tree" not in ops._runtime_info(grid)
+    assert ops.build_summary(kd).backend == utils.SEARCH_KDTREE
+    assert ops.build_summary(grid).backend == utils.SEARCH_GRID
 
     region, rv3d = _perspective_view((14.0, -25.0, 12.0), (14.0, 0.0, 0.0))
     import random
@@ -1491,6 +1492,304 @@ def case_kdtree_edit_mode_excludes_moving():
         assert found[1], "no other vertex found near a moving one"
         # A moving vertex never snaps to where it (or another moving one) started.
         assert all((c.location - s).length > 1e-6 for c in found[1] for s in starts)
+
+
+# --- 2.0 interface: move decisions, words, translation, shortcut ---------
+
+def case_move_decisions():
+    # A: Off -> X -> Y -> Z -> Off; several axes from the panel go back to Off
+    assert utils.next_align_axes(()) == ("X",)
+    assert utils.next_align_axes(("X",)) == ("Y",)
+    assert utils.next_align_axes({"Y"}) == ("Z",)
+    assert utils.next_align_axes(frozenset({"Z"})) == ()
+    assert utils.next_align_axes(("X", "Z")) == ()
+
+    # S: the next Snap To that can have anything to snap to
+    nxt = utils.next_scope
+    # Object Mode: Same Mesh never; Selected Objects only with another
+    # selected mesh; Collection only with a collection
+    assert nxt("VISIBLE", False, False, False) == "VISIBLE"
+    assert nxt("VISIBLE", False, True, False) == "COLLECTION"
+    assert nxt("COLLECTION", False, True, False) == "VISIBLE"
+    assert nxt("COLLECTION", False, True, True) == "SELECTED"
+    assert nxt("SELECTED", False, False, True) == "VISIBLE"
+    # Edit Mode: Same Mesh and Selected Objects always
+    assert nxt("VISIBLE", True, False, False) == "SELF"
+    assert nxt("SELF", True, False, False) == "SELECTED"
+    assert nxt("SELECTED", True, False, False) == "VISIBLE"
+    assert nxt("VISIBLE", True, True, False) == "COLLECTION"
+
+    # Ctrl: off with Snap Exactly, exact with Gradual Pull -> (search, exact)
+    assert utils.snap_rule(utils.SNAP_EXACT, False) == (True, True)
+    assert utils.snap_rule(utils.SNAP_EXACT, True) == (False, True)
+    assert utils.snap_rule(utils.SNAP_PULL, False) == (True, False)
+    assert utils.snap_rule(utils.SNAP_PULL, True) == (True, True)
+
+    assert abs(utils.pull_ratio(0.0, 30, 0.35) - 0.35) < 1e-9
+    assert abs(utils.pull_ratio(15.0, 30, 0.5) - 0.25) < 1e-9
+    assert utils.pull_ratio(30.0, 30, 0.35) == 0.0
+    assert utils.pull_ratio(45.0, 30, 0.35) == 0.0
+
+    prop = smart_clipping.prefs.SMARTCLIP_AddonPreferences.bl_rna.properties["snap_behavior"]
+    assert prop.default == utils.SNAP_EXACT, prop.default
+
+
+class _StubLayout:
+    """Records label() calls of a status bar draw function."""
+
+    def __init__(self, log):
+        self.log = log
+
+    def row(self, align=False):
+        return self
+
+    def label(self, text="", icon="NONE", translate=True):
+        self.log.append((text, icon))
+
+    def separator(self, factor=1.0):
+        pass
+
+
+def case_hud_words():
+    from smart_clipping import hud
+
+    scene = bpy.context.scene
+    units = scene.unit_settings
+    saved = (units.system, units.scale_length, units.use_separate)
+    try:
+        units.system = "NONE"
+        assert hud.format_length(1.5, scene) == "1.500", hud.format_length(1.5, scene)
+        units.system = "METRIC"
+        units.scale_length = 1.0
+        units.use_separate = False
+        text = hud.format_length(1.25, scene)
+        assert text.replace(" ", "") == "1.25m", text
+        units.scale_length = 0.01          # 1 unit = 1 cm
+        text = hud.format_length(1.25, scene)
+        assert text.replace(" ", "") == "1.25cm", text
+        units.system = "IMPERIAL"
+        units.scale_length = 1.0
+        text = hud.format_length(0.3048, scene)
+        assert "'" in text or "ft" in text, text
+    finally:
+        units.system, units.scale_length, units.use_separate = saved
+
+    def cand(kind, name="Cube"):
+        return detector.SnapCandidate(kind, Vector(), Vector(), 3.0, 3.0, name)
+
+    assert hud.candidate_runs(cand("POINT"), utils.STATE_SNAPPED) == [
+        ("Snapped", "accent"), ("Cube vertex", "text")]
+    assert hud.candidate_runs(cand("BOUNDS"), utils.STATE_PULLING, "0.1 m") == [
+        ("Pulling", "accent"), ("Cube bounding box", "text"), ("0.1 m", "muted")]
+    assert hud.candidate_runs(cand("ALIGN_Z"), utils.STATE_SNAPPED)[1] == (
+        "Z coordinate of Cube", "text")
+    assert hud.moved_text("1 m", None) == "Moved 1 m"
+    assert hud.moved_text("1 m", "X") == "Moved 1 m along X"
+    assert hud.moved_text("1 m", "YZ") == "Moved 1 m on YZ"
+
+    plain = hud.mode_lines("VISIBLE", frozenset(), False, None, None, False)
+    assert len(plain) == 1
+    words = [text for text, _role in plain[0] if text]
+    assert words == ["Snap To", "Visible Objects", "Align Only", "Off"], words
+    noted = hud.mode_lines("SELF", frozenset({"X"}), True, "Y", None, True)
+    assert len(noted) == 3 and "paused" in noted[1][0][0] and "limit" in noted[2][0][0]
+    empty = hud.mode_lines("SELF", frozenset(), False, None,
+                           hud.empty_reason("SELF", False, False), False)
+    assert empty[1][0] == ("Nothing to snap to.", "warning") and "Edit Mode" in empty[1][1][0]
+    assert "collection" in hud.empty_reason("COLLECTION", False, False)
+    assert "Select" in hud.empty_reason("SELECTED", False, False)
+    assert hud.limit_detail(3, 0) == "3 objects simplified"
+    assert hud.limit_detail(3, 2) == "3 simplified, 2 left out"
+
+    # Status bar: every icon exists in this Blender, Ctrl follows Snap Behavior
+    valid = set(bpy.types.UILayout.bl_rna.functions["label"].parameters["icon"].enum_items.keys())
+    for behavior, ctrl in ((utils.SNAP_EXACT, "Move Freely"), (utils.SNAP_PULL, "Snap Exactly")):
+        items = hud.status_items(behavior)
+        assert all(icon in valid for icons, _label in items for icon in icons)
+        log = []
+        ops.status_draw_fn(behavior)(SimpleNamespace(layout=_StubLayout(log)), bpy.context)
+        assert ("Confirm", "MOUSE_LMB") in log and (ctrl, "EVENT_CTRL") in log, log
+        assert ("Cancel", "EVENT_ESC") in log and ("", "MOUSE_RMB") in log, log
+        assert all(icon != "NONE" for _text, icon in log), log
+    line = hud.status_text(utils.SNAP_EXACT)
+    assert "RMB/Esc Cancel" in line and "Shift+X/Y/Z Plane" in line, line
+
+
+def case_build_summary():
+    assert ops.build_summary(None) == (0, False, 0, 0, None)
+    _clear_scene()
+    active = _add_cube("BS_Active", (0.0, 0.0, 0.0))
+    _add_cube("BS_Cube", (3.0, 0.0, 0.0))
+    for i in range(6):
+        _create_grid_object(f"BS_Grid{i}", (8.0 + 12.0 * i, 0.0, 0.0), 30, 30)
+    _select_only(active)
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+    with _temporary_budget(1000):
+        build = detector.build_spatial_tree(bpy.context, active_obj=active)
+    summary = ops.build_summary(build)
+    assert summary.limit_exceeded and summary.points == build.point_count
+    assert summary.simplified == len(set(build.partial_objects) | set(build.bounds_objects)) > 0
+    assert summary.skipped == len(build.skipped_objects)
+
+
+def case_translations():
+    import string
+
+    from smart_clipping import hud, i18n
+
+    view = bpy.context.preferences.view
+    tr = bpy.app.translations
+    switches = [name for name in ("language", "use_translate_interface",
+                                  "use_translate_tooltips", "use_translate_reports")
+                if hasattr(view, name)]          # Translate Reports is not in every version
+    saved = {name: getattr(view, name) for name in switches}
+    fields = string.Formatter()
+
+    def placeholders(text):
+        return {name for _lit, name, _spec, _conv in fields.parse(text) if name}
+
+    try:
+        for name in switches:
+            setattr(view, name, "ja_JP" if name == "language" else True)
+        if tr.locale != "ja_JP":
+            print("  (this Blender cannot switch to Japanese; translation checks skipped)")
+            return
+
+        for msgid, msgstr in i18n.MESSAGES.items():
+            assert placeholders(msgid) == placeholders(msgstr), msgid
+            assert msgstr and msgstr != msgid, msgid
+
+        # Registered messages apply to all of Blender: none may give one of
+        # Blender's own messages a different translation.
+        i18n.unregister()
+        try:
+            clashes = []
+            for msgid, msgstr in i18n.MESSAGES.items():
+                contexts = ("*", "Operator") if msgid in i18n.OPERATOR_MESSAGES else ("*",)
+                for ctx in contexts:
+                    builtin = tr.pgettext_iface(msgid, ctx)
+                    if builtin not in (msgid, msgstr):
+                        clashes.append((ctx, msgid, builtin))
+            assert not clashes, clashes
+        finally:
+            i18n.register()
+
+        # Every name and tooltip the add-on registers comes out in Japanese,
+        # from these messages or from Blender's catalog.
+        keep = {"Smart Clipping", "X", "Y", "Z"}
+        missing = []
+
+        def want(text, ctx="*"):
+            if not text or text in keep:
+                return
+            if tr.pgettext_iface(text, ctx) == text and tr.pgettext_tip(text, ctx) == text:
+                missing.append(text)
+
+        # Blender's own (base class) properties are not the add-on's words
+        inherited = {p.identifier for base in (bpy.types.Operator, bpy.types.AddonPreferences)
+                     for p in base.bl_rna.properties}
+
+        def props(rna_props):
+            for prop in rna_props:
+                if prop.identifier in inherited or prop.is_hidden:
+                    continue
+                want(prop.name)
+                want(prop.description)
+                for item in getattr(prop, "enum_items", ()):
+                    want(item.name)
+                    want(item.description)
+
+        props(smart_clipping.prefs.SMARTCLIP_AddonPreferences.bl_rna.properties)
+        props(bpy.types.Scene.bl_rna.properties[name] for name in smart_clipping._SCENE_PROPS)
+        for cls in (smart_clipping.SMARTCLIP_OT_modal_move,
+                    smart_clipping.SMARTCLIP_OT_add_default_hotkeys,
+                    smart_clipping.SMARTCLIP_OT_clear_hotkeys):
+            want(cls.bl_label, "Operator")
+            want(cls.bl_description)
+            props(cls.bl_rna.properties)
+        for cls in (smart_clipping.SMARTCLIP_PT_panel, smart_clipping.SMARTCLIP_PT_limits):
+            want(cls.bl_label)
+        assert not missing, missing
+
+        # Words the add-on assembles itself
+        assert hud.moved_text("1 m", "X") == "X 軸に沿って 1 m 移動", hud.moved_text("1 m", "X")
+        assert hud.scope_name("SELF") == "同じメッシュ"
+        assert hud.scope_name("VISIBLE") == tr.pgettext_iface("Visible Objects") != "Visible Objects"
+        cand = detector.SnapCandidate("POINT", Vector(), Vector(), 1.0, 1.0, "Cube")
+        assert hud.candidate_runs(cand, utils.STATE_SNAPPED) == [
+            ("スナップ中", "accent"), ("Cube の頂点", "text")]
+        assert i18n.rpt("Nothing selected to move") == "動かすものが選択されていません"
+        # Confirm is Blender's own word, translated by Blender's catalog
+        confirm = tr.pgettext_iface("Confirm")
+        assert confirm != "Confirm" and confirm in hud.status_text(utils.SNAP_EXACT)
+    finally:
+        for name, value in saved.items():
+            setattr(view, name, value)
+
+
+def case_shortcut_reset():
+    from smart_clipping import keymap
+
+    kmis = _addon_kmis()
+    assert kmis
+    try:
+        for kmi in kmis:
+            kmi.type = "H"
+            kmi.shift = False
+            kmi.ctrl = True
+        keymap.set_hotkeys_wanted(False)
+        assert not any(kmi.active for kmi in kmis)
+        bpy.ops.smartclip.add_default_hotkeys()
+        assert all(kmi.type == "G" and kmi.shift and not kmi.ctrl and kmi.active
+                   for kmi in kmis), [(k.type, k.shift, k.ctrl, k.active) for k in kmis]
+        # The user keymap shows the same items (drawn in the preferences).
+        # Without a window Blender merges the keymaps only when asked to.
+        bpy.context.window_manager.keyconfigs.update()
+        labels = [label for label, _km, _kmi in keymap.user_items()]
+        assert labels == ["Object Mode", "Edit Mode"], labels
+    finally:
+        bpy.ops.smartclip.add_default_hotkeys()
+
+
+def case_redo_keeps_move_settings():
+    # Adjust Last Operation undoes, then calls execute() with the recorded
+    # properties; Repeat Last calls it again.  Both must do what the move did.
+    _clear_scene()
+    a = _add_cube("RD_A", (0.0, 0.0, 0.0))
+    b = _add_cube("RD_B", (3.0, 0.0, 0.0))
+    scene = bpy.context.scene
+    for obj in (a, b):
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = a
+    scene.smartclip_target_scope = "VISIBLE"
+    scene.smartclip_align_x = scene.smartclip_align_y = scene.smartclip_align_z = False
+
+    # The move started with Selected Objects (only the active object moves)
+    # and ended with Snap To = Visible Objects and Align Only = Y (A / S).
+    bpy.ops.view3d.smartclip_move(offset=(1.0, 0.0, 0.0), start_scope="SELECTED",
+                                  final_scope="VISIBLE", final_align=(False, True, False))
+    bpy.context.view_layer.update()
+    assert (a.matrix_world.translation - Vector((1.0, 0.0, 0.0))).length < 1e-6
+    assert (b.matrix_world.translation - Vector((3.0, 0.0, 0.0))).length < 1e-6
+    assert scene.smartclip_target_scope == "VISIBLE"
+    assert (scene.smartclip_align_x, scene.smartclip_align_y, scene.smartclip_align_z) == (
+        False, True, False)
+
+    # From a script, with nothing recorded, the scene's settings decide.
+    scene.smartclip_align_y = False
+    bpy.ops.view3d.smartclip_move(offset=(0.0, 1.0, 0.0))
+    bpy.context.view_layer.update()
+    assert (b.matrix_world.translation - Vector((3.0, 1.0, 0.0))).length < 1e-6
+    assert not scene.smartclip_align_y
+
+
+def case_poll_without_active_object():
+    _clear_scene()
+    cube = _add_cube("PO_Cube", (0.0, 0.0, 0.0))
+    bpy.context.view_layer.objects.active = None
+    assert not smart_clipping.SMARTCLIP_OT_modal_move.poll(bpy.context)
+    _select_only(cube)
+    assert smart_clipping.SMARTCLIP_OT_modal_move.poll(bpy.context)
 
 
 CASES = {
@@ -1539,6 +1838,13 @@ CASES = {
     "kdtree_cone_rim": case_kdtree_cone_rim,
     "search_backend_setting": case_search_backend_setting,
     "kdtree_edit_mode_excludes_moving": case_kdtree_edit_mode_excludes_moving,
+    "move_decisions": case_move_decisions,
+    "hud_words": case_hud_words,
+    "build_summary": case_build_summary,
+    "translations": case_translations,
+    "shortcut_reset": case_shortcut_reset,
+    "poll_without_active_object": case_poll_without_active_object,
+    "redo_keeps_move_settings": case_redo_keeps_move_settings,
 }
 
 
