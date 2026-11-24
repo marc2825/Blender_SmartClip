@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
 Install a release ZIP the way a user would and check that the add-on works.
 

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from mathutils import Matrix, Vector
 from bpy_extras.view3d_utils import location_3d_to_region_2d, region_2d_to_location_3d
 

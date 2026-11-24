@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Viewport overlay during a move.
 
 3D (POST_VIEW): guide lines and the constraint axis.

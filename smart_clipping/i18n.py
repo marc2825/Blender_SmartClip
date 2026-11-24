@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Japanese translation of the add-on's interface.
 
 Blender translates labels, property names, tooltips and enum items through

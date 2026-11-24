@@ -191,7 +191,18 @@ Not checked:
 
 The add-on is distributed as a legacy add-on ZIP (`bl_info`, module `smart_clipping`) from GitHub Releases, and supports Blender 4.0 and later. The ZIP contains `smart_clipping/LICENSE`.
 
-There is no `blender_manifest.toml` yet. With one, Blender 4.2+ installs the add-on as an extension under `bl_ext.<repository>.smart_clipping`: its preferences start from their defaults, an installed legacy copy can register alongside it, and 4.0 / 4.1 need the legacy ZIP anyway. The Blender Extensions platform also requires a GPL-compatible license (GPL-3.0-or-later for the whole package), which is open in [#20](https://github.com/marc2825/Blender_SmartClip/issues/20). The extension format will be revisited together with that decision.
+There is no `blender_manifest.toml` yet. With one, Blender 4.2+ installs the add-on as an extension under `bl_ext.<repository>.smart_clipping`: its preferences start from their defaults, an installed legacy copy can register alongside it, and 4.0 / 4.1 need the legacy ZIP anyway. Support for the Blender Extensions platform is planned for 2.1.0 in [#38](https://github.com/marc2825/Blender_SmartClip/issues/38).
+
+### License and publishing conditions
+
+The whole repository is GPL-3.0-or-later from 2.0.3 ([#20](https://github.com/marc2825/Blender_SmartClip/issues/20)). Releases up to 2.0.2 were published under MIT and stay so. Every Python file starts with `SPDX-FileCopyrightText` and `SPDX-License-Identifier: GPL-3.0-or-later`; add the same two lines to new files.
+
+| Channel | License | Conditions |
+|---|---|---|
+| GitHub Releases (legacy ZIP, Blender 4.0+) | GPL-3.0-or-later; 2.0.2 and earlier MIT | The ZIP carries the license text as `smart_clipping/LICENSE`, and its sources keep their SPDX lines (`tests/package_test.py`, `tests/install_zip_test.py`). For Blender's own position on add-ons and the GPL, see its [license page](https://www.blender.org/about/license/) and [FAQ](https://www.blender.org/support/faq/). |
+| [Blender Extensions](https://extensions.blender.org/) (planned, 2.1.0) | GPL-3.0-or-later, declared as `license = ["SPDX:GPL-3.0-or-later"]` | From the [terms of service](https://extensions.blender.org/terms-of-service/): add-ons must be wholly compliant with GPL v3 or later (1.1); images, SVG files, fonts and other assets bundled in the extension must be CC0 (1.2); copyright holders of bundled code are credited in the manifest (1.3); "Blender" is not part of the name (2.1), and no Blender logo appears in icons, thumbnails or previews (2.2); the code is reviewable Python only (3.5, 3.6); the extension is self-contained and loads no remote code (5.1). The [manifest](https://docs.blender.org/manual/en/latest/advanced/extensions/getting_started.html) needs `blender_version_min` of at least 4.2.0 and a tagline of up to 64 characters without end punctuation; see also [Licenses](https://docs.blender.org/manual/en/latest/advanced/extensions/licenses.html). |
+
+The release ZIP holds no images or fonts. `assets/` (logo, demo) is part of the repository under its license, and would have to be CC0 before any of it goes into an extension package.
 
 ## Versions
 

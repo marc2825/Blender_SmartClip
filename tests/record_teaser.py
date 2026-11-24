@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
 Record the frames of the README demo (assets/teaser.gif) from the current UI.
 

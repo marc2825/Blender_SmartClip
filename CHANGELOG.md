@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- The license is now GPL-3.0-or-later instead of MIT, as Blender asks of add-ons. Releases up to 2.0.2 stay under MIT. (#20)
+
 ## [2.0.2] - 2026-11-24
 
 ### Fixed

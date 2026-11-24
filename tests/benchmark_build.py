@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
 Measure collecting the snap points (the start of a move, and S switching
 Snap To) on large evaluated meshes: time, peak memory, and what was kept.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Snap point collection (build) and candidate search (find).
 
 Snap points are collected once when a move starts and stay static for the

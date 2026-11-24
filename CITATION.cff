@@ -4,6 +4,7 @@ message: "If you use this addon in research or publications, please cite it."
 type: software
 authors:
   - family-names: "Kono"
+license: GPL-3.0-or-later
 version: "2.0.2"
 date-released: "2026-11-24"
 url: "https://github.com/marc2825/Blender_SmartClip.git"

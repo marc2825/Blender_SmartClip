@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
 Checks of the release ZIP's contents (plain Python 3, no Blender needed).
 
@@ -84,10 +87,16 @@ def main() -> int:
             infos = zf.infolist()
             names = [i.filename for i in infos]
             license_ok = zf.read("smart_clipping/LICENSE") == (ROOT / "LICENSE").read_bytes()
+            sources = {n: zf.read(n) for n in names if n.endswith(".py")}
         check("zip_contents_exact", names == expected,
               f"extra {sorted(set(names) - set(expected))}, missing {sorted(set(expected) - set(names))}")
         check("one_top_folder", {n.split("/", 1)[0] for n in names} == {"smart_clipping"})
         check("license_text", license_ok)
+        check("sources_unchanged", all(data == (ROOT / n).read_bytes() for n, data in sources.items()))
+        spdx = (b"# SPDX-FileCopyrightText: 2026 marc2825\n"
+                b"# SPDX-License-Identifier: GPL-3.0-or-later\n")
+        check("spdx_headers", all(data.startswith(spdx) for data in sources.values()),
+              str([n for n, data in sources.items() if not data.startswith(spdx)]))
         check("fixed_metadata", all(i.date_time == (1980, 1, 1, 0, 0, 0)
                                     and i.external_attr == 0o644 << 16
                                     and i.create_system == 3 for i in infos))

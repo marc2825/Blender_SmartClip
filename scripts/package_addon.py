@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
 Package the add-on as a release zip (``smart_clipping/`` at the zip root,
 installable via Blender > Preferences > Add-ons > Install from Disk).

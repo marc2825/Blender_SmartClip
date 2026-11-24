@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
 Single source of truth for the addon version: ``bl_info["version"]`` in
 ``smart_clipping/__init__.py``.

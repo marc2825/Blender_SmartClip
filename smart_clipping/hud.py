@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Words shown during a move: viewport labels, the mode lines and the status bar.
 
 A label is a list of runs ``(text, role)``; drawing.py turns roles into

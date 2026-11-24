@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
 End-to-end test of the modal operator in a real Blender UI using simulated
 input events.  Needs a display (opens a Blender window for a few seconds);

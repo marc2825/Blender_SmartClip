@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Modal operator that drives the Smart Clipping move workflow.
 
 Lifecycle

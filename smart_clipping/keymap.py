@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 marc2825
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The Shift+G keymap items and whether they are on.
 
 The items are added at the head of their keymaps, so they take precedence
