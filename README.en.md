@@ -13,7 +13,7 @@
 
 A Blender add-on that shows guide lines to nearby vertices while you move objects or vertices, and helps you snap to them. It is inspired by [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) in PowerPoint.
 
-![A moving object shows a guide line to a nearby vertex and snaps to it](assets/teaser.gif)
+![In Edit Mode a vertex snaps onto a corner of another box, then slides along X, lining its X coordinate up with the boxes on both sides and with its own mesh. Top: perspective view, bottom: front view](assets/teaser.gif)
 
 > Supports Blender 4.0 and later. Automated tests run on Blender 4.0, 4.2 LTS, and 5.2 LTS.
 

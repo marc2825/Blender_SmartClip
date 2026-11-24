@@ -13,7 +13,7 @@
 
 オブジェクトや頂点を移動するときに、近くの頂点へのガイド線を表示し、位置合わせ（スナップ）を手伝う Blender アドオンです。PowerPoint の[スマートガイド](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3)を参考にしています。
 
-![移動中のオブジェクトから近くの頂点へガイド線が伸び、スナップする様子](assets/teaser.gif)
+![編集モードで頂点を動かし、ほかの箱の頂点にスナップしたあと、X 軸に沿って両側の箱や自分のメッシュの頂点と X 座標をそろえていく様子。上は透視投影、下は正面図](assets/teaser.gif)
 
 > Blender 4.0 以降に対応しています。自動テストは Blender 4.0、4.2 LTS、5.2 LTS で実行しています。
 
