@@ -22,7 +22,11 @@ from bpy_extras.view3d_utils import location_3d_to_region_2d
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
 
-from .utils import STATE_PULLING, STATE_SNAPPED
+from .utils import STATE_PROJECTED, STATE_PULLING, STATE_SNAPPED
+
+# Exact snaps (on the snap point, or as close as constraints allow) use the
+# snap colour; only Snapped fills the marker.
+_EXACT_STATES = (STATE_SNAPPED, STATE_PROJECTED)
 
 # Half-length of the "infinite-looking" constraint guide lines.
 _CONSTRAINT_HALF_LEN = 50.0
@@ -303,12 +307,13 @@ def draw_3d(op, _context):
 def _draw_3d(op):
     scale = _ui_scale()
     colors = _theme()
-    color = op.color_snap if op.snap_state == STATE_SNAPPED else op.color_guide
+    color = op.color_snap if op.snap_state in _EXACT_STATES else op.color_guide
 
     lines = []
     dashes = []
     free = op.free_world
-    applied = op.applied_world
+    # Where the moving point is (Location Lock and object constraints applied)
+    applied = getattr(op, "pivot_world", None) or op.applied_world
     cand = op.current_candidate
 
     if cand:
@@ -323,7 +328,10 @@ def _draw_3d(op):
             if free and applied and (free - applied).length > 1e-9:
                 lines.extend([free, applied])
             if applied and (applied - cand.location).length > 1e-9:
-                lines.extend([applied, cand.location])
+                if op.snap_state == STATE_PROJECTED:
+                    dashes.extend(_dashed_line_points(applied, cand.location))
+                else:
+                    lines.extend([applied, cand.location])
     elif free and applied and (free - applied).length > 1e-9:
         lines.extend([free, applied])
 
@@ -362,7 +370,7 @@ def _draw_2d(op):
         return
     scale = _ui_scale()
     colors = _theme()
-    accent = tuple(op.color_snap if op.snap_state == STATE_SNAPPED else op.color_guide)
+    accent = tuple(op.color_snap if op.snap_state in _EXACT_STATES else op.color_guide)
     colors["accent"] = (*accent[:3], 1.0)
 
     def project(co):
@@ -371,7 +379,7 @@ def _draw_2d(op):
     gpu.state.blend_set("ALPHA")
     try:
         free_px = project(op.free_world)
-        applied_px = project(op.applied_world)
+        applied_px = project(getattr(op, "pivot_world", None) or op.applied_world)
         cand = op.current_candidate
 
         # Snap distance: snap points inside this ring are within reach
@@ -389,7 +397,7 @@ def _draw_2d(op):
                                  colors["bg"], 0.7 * scale)
             else:
                 shape = "square" if cand.type == "BOUNDS" else "circle"
-            if (free_px is not None and op.snap_state in (STATE_SNAPPED, STATE_PULLING)
+            if (free_px is not None and op.snap_state in (*_EXACT_STATES, STATE_PULLING)
                     and applied_px is not None and (free_px - applied_px).length > 3.0):
                 _draw_cross(free_px, 5.0 * scale, colors["muted"], 1.5 * scale)
             if cand_px is not None:

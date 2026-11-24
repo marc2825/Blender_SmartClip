@@ -34,6 +34,7 @@ from .utils import (
     DEFAULT_SNAP_DISTANCE_PX,
     STATE_FREE,
     STATE_NONE,
+    STATE_PROJECTED,
     STATE_PULLING,
     STATE_SNAPPED,
     apply_constraint,
@@ -279,6 +280,7 @@ def gather_movers(context, scope=None):
 
     Edit Mode: the selected vertices of every mesh in Edit Mode; the pivot
     is their median point.  ``movers`` is empty when nothing would move.
+    See pivot_objects() for where the pivot is once the movers moved.
     """
     # matrix_world can be stale (right after undo, or when a script changed
     # transforms); the parent-space conversion relies on it.
@@ -328,6 +330,36 @@ def gather_movers(context, scope=None):
     else:
         pivot = sum((m.obj.matrix_world.translation for m in movers), Vector()) / len(movers)
     return pivot, movers
+
+
+def pivot_objects(context, movers) -> list:
+    """Objects whose evaluated origins give the pivot (Object Mode), or [].
+
+    The active object when it moves (itself or with a moving parent), else
+    every moving object (the median origin), as in gather_movers().
+    """
+    if context.mode == "EDIT_MESH" or not movers:
+        return []
+    active = context.active_object
+    moving = {m.obj.as_pointer() for m in movers}
+    if active is not None and (active.as_pointer() in moving
+                               or _has_moving_ancestor(active, moving)):
+        return [active]
+    return [m.obj for m in movers]
+
+
+def reached(position: Vector, target: Vector, pixel_size=None) -> bool:
+    """Whether *position* is on *target*, allowing for float32 rounding.
+
+    The tolerance is relative to the coordinates and, when the size of a
+    pixel there is known, at most a twentieth of it, so a point visibly off
+    the target never counts as on it, at any scene scale.
+    """
+    scale = max(1.0, max(abs(c) for c in target), max(abs(c) for c in position))
+    tolerance = 1e-5 * scale
+    if pixel_size:
+        tolerance = min(tolerance, 0.05 * pixel_size)
+    return (position - target).length <= tolerance
 
 
 # ----------------------------------------------------------------------
@@ -546,6 +578,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self._rv3d.update()
 
         self._start_world, self._movers = gather_movers(context)
+        self._pivot_objects = pivot_objects(context, self._movers)
         if not self._movers:
             self.report({"WARNING"}, rpt("Select at least one vertex") if self._is_edit
                         else rpt("Nothing selected to move"))
@@ -668,6 +701,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self._region = None
         self._rv3d = None
         self._movers = []
+        self._pivot_objects = []
         self._workspace = None
 
         self._start_mouse = Vector((0.0, 0.0))
@@ -691,7 +725,8 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self.region_pointer = 0
         self.threshold_px = DEFAULT_SNAP_DISTANCE_PX
         self.free_world = None
-        self.applied_world = None
+        self.applied_world = None   # where the move puts the pivot (constraint applied)
+        self.pivot_world = None     # where the pivot is (Location Lock, object constraints)
         self.current_candidate = None
         self.snap_state = STATE_NONE
         self.snapping_on = True
@@ -875,25 +910,52 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         if cand is not None:
             if exact:
                 target = cand.location.copy()
-                self.snap_state = STATE_SNAPPED
             else:
                 strength = SOFT_PULL_ALIGN if cand.type.startswith("ALIGN_") else SOFT_PULL_POINT
                 target = self.free_world.lerp(
                     cand.location, pull_ratio(cand.screen_dist, threshold_px, strength))
-                self.snap_state = STATE_PULLING
             # Snapping must not break an active axis / plane constraint.
             self.applied_world = self._constrain_to_start(target)
         else:
             self.applied_world = self.free_world.copy()
-            self.snap_state = STATE_NONE if search else STATE_FREE
 
         delta = self.applied_world - self._start_world
         for mover in self._movers:
             mover.apply(delta)
+        self.pivot_world = self._pivot_now(context)
+
+        if cand is None:
+            self.snap_state = STATE_NONE if search else STATE_FREE
+        elif not exact:
+            self.snap_state = STATE_PULLING
+        elif reached(self.pivot_world, cand.location,
+                     pixel_world_size(self._region, self._rv3d, cand.location)):
+            self.snap_state = STATE_SNAPPED
+        else:
+            self.snap_state = STATE_PROJECTED
         self._update_labels(context)
 
         if context.area:
             context.area.tag_redraw()
+
+    def _pivot_now(self, context) -> Vector:
+        """Where the pivot is after the movers moved.
+
+        In Object Mode Location Lock, object constraints and drivers can keep
+        an object from where the move puts it, so the evaluated origins are
+        read (the viewport would evaluate them for the next redraw anyway).
+        Edit Mode vertices are where they were written.
+        """
+        if not self._pivot_objects:
+            return self.applied_world.copy()
+        context.view_layer.update()
+        try:
+            total = Vector((0.0, 0.0, 0.0))
+            for obj in self._pivot_objects:
+                total += obj.matrix_world.translation
+            return total / len(self._pivot_objects)
+        except ReferenceError:
+            return self.applied_world.copy()
 
     def _restore(self):
         for mover in self._movers:
@@ -909,15 +971,16 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
     def _update_labels(self, context):
         scene = context.scene
         cand = self.current_candidate
+        pivot = self.pivot_world if self.pivot_world is not None else self.applied_world
         if cand is not None:
             distance = None
-            if self.snap_state == STATE_PULLING and self.applied_world is not None:
-                distance = hud.format_length((cand.location - self.applied_world).length, scene)
+            if self.snap_state in (STATE_PULLING, STATE_PROJECTED) and pivot is not None:
+                distance = hud.format_length((cand.location - pivot).length, scene)
             self.candidate_runs = hud.candidate_runs(cand, self.snap_state, distance)
         else:
             self.candidate_runs = []
-        if self.applied_world is not None:
-            moved = (self.applied_world - self._start_world).length
+        if pivot is not None:
+            moved = (pivot - self._start_world).length
             self.moved_label = hud.moved_text(hud.format_length(moved, scene),
                                               self.constraint_mode)
         else:

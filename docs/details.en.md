@@ -21,7 +21,7 @@ The status bar lists these keys during a move.
 
 Mouse and numpad input works mid-move only where the keymap binds it to view navigation; shortcuts that change anything else, such as `Ctrl+Numpad+` (Select More) or `Alt+Wheel` (change frame), do not fire.
 
-Press the same key again to release an axis or plane constraint. Constraints use the global axes; a constrained axis is drawn in the theme's axis color, and snapped positions stay on the constrained axis or plane.
+Press the same key again to release an axis or plane constraint. Constraints use the global axes; a constrained axis is drawn in the theme's axis color, and snapped positions stay on the constrained axis or plane. A vertex off the axis or plane is projected onto it: the move goes to the nearest point on it and the label says "Projected".
 
 Settings switched with `A` and `S` are kept when you confirm and put back when you cancel.
 
@@ -29,8 +29,8 @@ Settings switched with `A` and `S` are kept when you confirm and put back when y
 
 | Where | What |
 |---|---|
-| Next to the snap point | Whether the move is snapped to it and what it is, for example "Snapped Cube vertex". With Gradual Pull: "Pulling" and the remaining distance |
-| The snap point's marker | Hollow while the point is only pulled toward it, filled once snapped. Its shape tells what it is: a circle for a vertex, a square for a bounding-box point (see [Snap point limit](#snap-point-limit)), a diamond for a lined-up coordinate |
+| Next to the snap point | Whether the move is snapped to it and what it is, for example "Snapped Cube vertex". With Gradual Pull: "Pulling" and the remaining distance. When a constraint or Lock Location keeps the moving point off it: "Projected" and the distance to it |
+| The snap point's marker | Hollow while the point is only pulled toward it or projected, filled once snapped. Its shape tells what it is: a circle for a vertex, a square for a bounding-box point (see [Snap point limit](#snap-point-limit)), a diamond for a lined-up coordinate |
 | Next to the moving point | How far it moved, in the scene's units, and along which axis or plane |
 | Dashed ring around the moving point | The snap distance: vertices inside it are within reach. Hidden while snapping is off |
 | Lower left of the viewport | The current Snap To and Align Only, and notes: nothing to snap to (with the reason and what to do), Align Only paused by a constraint, snap point limit reached |
@@ -155,7 +155,7 @@ In measurements the Screen-space Grid was faster in almost every case: with 100,
 ## Moving
 
 - Selecting both a parent and its child does not move the child twice.
-- Axes locked with Lock Location do not move.
+- Axes locked with Lock Location do not move, and object constraints (Limit Location and others) apply. When they keep the moving point off a snap point, it goes as close as it can and the label says "Projected".
 - Orbiting, panning, or zooming during a move does not make the selection jump.
 
 ## Troubleshooting

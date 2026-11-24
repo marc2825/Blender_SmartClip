@@ -1601,6 +1601,46 @@ class _StubLayout:
         pass
 
 
+def case_snap_reached_tolerance():
+    # Issue #28: Snapped only when the moving point is on the snap point,
+    # at any scene scale; Projected otherwise.
+    for scale in (0.001, 1.0, 1000.0):
+        target = Vector((1.0, 2.0, 3.0)) * scale
+        pixel = 0.002 * scale          # world size of a screen pixel there
+        assert ops.reached(target.copy(), target, pixel)
+        rounded = Vector(tuple(float(np.float32(c * (1 + 3e-7))) for c in target))
+        assert ops.reached(rounded, target, pixel), (scale, rounded - target)
+        off = target + Vector((0.0, 0.0, 0.5 * pixel))
+        assert not ops.reached(off, target, pixel), scale
+        assert not ops.reached(target + Vector((0.0, 0.0, 0.01 * scale)), target, pixel)
+    assert ops.reached(Vector((5.0, 0.0, 0.0)), Vector((5.0, 0.0, 1e-7)))
+    assert not ops.reached(Vector((5.0, 0.0, 0.0)), Vector((5.0, 0.0, 1e-3)))
+
+
+def case_pivot_objects():
+    # The objects whose evaluated origins give the pivot after the move.
+    _clear_scene()
+    parent = _add_cube("Piv_Parent", (0.0, 0.0, 0.0))
+    child = _add_cube("Piv_Child", (2.0, 0.0, 0.0))
+    other = _add_cube("Piv_Other", (5.0, 0.0, 0.0))
+    child.parent = parent
+    bpy.context.scene.smartclip_target_scope = "VISIBLE"
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in (parent, child, other):
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = child
+    _pivot, movers = ops.gather_movers(bpy.context)
+    assert {m.obj.name for m in movers} == {"Piv_Parent", "Piv_Other"}
+    # The active child moves with its parent: its origin is the pivot
+    assert [o.name for o in ops.pivot_objects(bpy.context, movers)] == ["Piv_Child"]
+    child.select_set(False)
+    bpy.context.view_layer.objects.active = None
+    _pivot, movers = ops.gather_movers(bpy.context)
+    assert sorted(o.name for o in ops.pivot_objects(bpy.context, movers)) == [
+        "Piv_Other", "Piv_Parent"]
+    assert ops.pivot_objects(bpy.context, []) == []
+
+
 def case_hud_words():
     from smart_clipping import hud
 
@@ -1634,6 +1674,8 @@ def case_hud_words():
         ("Pulling", "accent"), ("Cube bounding box", "text"), ("0.1 m", "muted")]
     assert hud.candidate_runs(cand("ALIGN_Z"), utils.STATE_SNAPPED)[1] == (
         "Z coordinate of Cube", "text")
+    assert hud.candidate_runs(cand("POINT"), utils.STATE_PROJECTED, "0.05 m") == [
+        ("Projected", "accent"), ("Cube vertex", "text"), ("0.05 m", "muted")]
     assert hud.moved_text("1 m", None) == "Moved 1 m"
     assert hud.moved_text("1 m", "X") == "Moved 1 m along X"
     assert hud.moved_text("1 m", "YZ") == "Moved 1 m on YZ"
@@ -1895,6 +1937,8 @@ CASES = {
     "kdtree_edit_mode_excludes_moving": case_kdtree_edit_mode_excludes_moving,
     "move_decisions": case_move_decisions,
     "hud_words": case_hud_words,
+    "snap_reached_tolerance": case_snap_reached_tolerance,
+    "pivot_objects": case_pivot_objects,
     "build_summary": case_build_summary,
     "translations": case_translations,
     "shortcut_reset": case_shortcut_reset,

@@ -137,6 +137,7 @@ MESSAGES = {
 
     # Viewport labels during a move
     "Snapped": "スナップ中",
+    "Projected": "投影",
     "Pulling": "引き寄せ中",
     "{object} vertex": "{object} の頂点",
     "{object} bounding box": "{object} のバウンディングボックス",

@@ -85,6 +85,37 @@ def skip(name, reason):
     print(f"[SKIP] {name} {reason}", flush=True)
 
 
+class _MoveSpy:
+    """Keeps the running move operator, to read its state between events."""
+
+    def __init__(self):
+        self.op = None
+        self._original = None
+
+    def __enter__(self):
+        cls = smart_clipping.ops.SMARTCLIP_OT_modal_move
+        self._original = cls._handle_event
+        original = self._original
+        spy = self
+
+        def recording(op, context, event):
+            spy.op = op
+            return original(op, context, event)
+
+        cls._handle_event = recording
+        return self
+
+    def __exit__(self, *exc):
+        smart_clipping.ops.SMARTCLIP_OT_modal_move._handle_event = self._original
+        return False
+
+    def state(self):
+        try:
+            return self.op.snap_state if self.op is not None else None
+        except ReferenceError:
+            return None
+
+
 class _EventLog:
     """Records the Ctrl and mouse-move events the running move receives."""
 
@@ -549,6 +580,139 @@ def _steps():
     yield STEP
     check("rmb_after_snap_restores", not _running()
           and (child.location - start_loc).length < 1e-6)
+
+    # Reachable: Snapped (the vertex of 4. again, watched through the spy)
+    with _MoveSpy() as spy:
+        yield from start_modal("snapped_state")
+        ev("MOUSEMOVE", "NOTHING", **near)
+        yield STEP
+        check("reachable_vertex_snapped",
+              spy.state() == smart_clipping.utils.STATE_SNAPPED
+              and (world() - vertex).length < 1e-4, f"state {spy.state()}")
+        ev("ESC", "PRESS")
+        yield STEP
+
+    # 4b. Exact snaps the move cannot reach (#28), seen from the top
+    #     (orthographic, so mouse offsets are world X / Y offsets).
+    #     Single-vertex targets on the -X side, away from the other objects.
+    saved_view = (rv3d.view_perspective, rv3d.view_rotation.copy(),
+                  rv3d.view_location.copy(), rv3d.view_distance)
+    rv3d.view_perspective = "ORTHO"
+    rv3d.view_rotation = Euler((0.0, 0.0, 0.0)).to_quaternion()
+    rv3d.view_location = start_world
+    rv3d.view_distance = 6.0
+    rv3d.update()
+    yield STEP
+
+    def point_object(name, co):
+        mesh = bpy.data.meshes.new(f"{name}_Mesh")
+        mesh.from_pydata([tuple(co)], [], [])
+        obj = bpy.data.objects.new(name, mesh)
+        scene.collection.objects.link(obj)
+        return obj
+
+    def to_px(co):
+        d = px(co) - px(start_world)
+        return dict(dx=round(d.x), dy=round(d.y))
+
+    off_axis = start_world + Vector((-1.2, 0.06, 0.0))
+    point_object("UI_OffAxis", off_axis)
+    bpy.context.view_layer.update()
+    with _MoveSpy() as spy:
+        yield from start_modal("projected_axis")
+        ev("MOUSEMOVE", "NOTHING", **to_px(start_world + Vector((-1.2, 0.0, 0.0))))
+        yield STEP
+        unconstrained = spy.state()
+        ev("X", "PRESS")
+        ev("X", "RELEASE")
+        yield STEP
+        pos = world()
+        check("x_constraint_projects_vertex",
+              spy.state() == smart_clipping.utils.STATE_PROJECTED
+              and abs(pos.x - off_axis.x) < 1e-4
+              and abs(pos.y - start_world.y) < 1e-5 and abs(pos.z - start_world.z) < 1e-5,
+              f"state {unconstrained} -> {spy.state()}, at {tuple(round(v, 4) for v in pos)}")
+        check("off_axis_vertex_snapped_before_constraint",
+              unconstrained == smart_clipping.utils.STATE_SNAPPED, str(unconstrained))
+        screenshot("projected.png")
+        ev("RIGHTMOUSE", "PRESS")
+        ev("RIGHTMOUSE", "RELEASE")
+        yield STEP
+        check("projected_rmb_restores", not _running()
+              and (child.location - start_loc).length < 1e-6)
+    bpy.data.objects.remove(bpy.data.objects["UI_OffAxis"])
+
+    # Location Lock Z (the parent rotates about Z only, so this is world Z)
+    above = start_world + Vector((-0.9, 0.3, 0.45))
+    point_object("UI_Above", above)
+    child.lock_location[2] = True
+    bpy.context.view_layer.update()
+    with bpy.context.temp_override(window=win, area=area):
+        bpy.ops.ed.undo_push(message="Smart Clipping UI test: Location Lock")
+    yield STEP
+    with _MoveSpy() as spy:
+        yield from start_modal("projected_lock")
+        ev("MOUSEMOVE", "NOTHING", **to_px(above))
+        yield STEP
+        pos = world()
+        state = spy.state()
+        ev("LEFTMOUSE", "PRESS")
+        ev("LEFTMOUSE", "RELEASE")
+        yield STEP
+    locked_pos = world()
+    check("location_lock_projected",
+          state == smart_clipping.utils.STATE_PROJECTED
+          and abs(pos.z - start_world.z) < 1e-5
+          and abs(pos.x - above.x) < 1e-4 and abs(pos.y - above.y) < 1e-4,
+          f"state {state}, at {tuple(round(v, 4) for v in pos)}")
+    check("location_lock_confirm_keeps_position", (locked_pos - pos).length < 1e-5)
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.ed.undo()
+    yield STEP
+    child = bpy.data.objects["UI_Child"]
+    target = bpy.data.objects["UI_Target"]
+    scene = bpy.context.scene
+    check("location_lock_undo", (world() - start_world).length < 1e-5)
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.ed.redo()
+    yield STEP
+    child = bpy.data.objects["UI_Child"]
+    target = bpy.data.objects["UI_Target"]
+    scene = bpy.context.scene
+    check("location_lock_redo", (world() - locked_pos).length < 1e-5,
+          f"{tuple(round(v, 4) for v in world())}")
+    child.location = start_loc
+    child.lock_location[2] = False
+    bpy.data.objects.remove(bpy.data.objects["UI_Above"])
+    bpy.context.view_layer.update()
+
+    # An object constraint (Limit Location, world space) stops it short
+    beyond = start_world + Vector((-1.2, 0.25, 0.0))
+    point_object("UI_Beyond", beyond)
+    limit = child.constraints.new("LIMIT_LOCATION")
+    limit.use_min_x = True
+    limit.min_x = start_world.x - 0.5
+    bpy.context.view_layer.update()
+    with _MoveSpy() as spy:
+        yield from start_modal("projected_limit")
+        ev("MOUSEMOVE", "NOTHING", **to_px(beyond))
+        yield STEP
+        pos = world()
+        check("limit_location_projected",
+              spy.state() == smart_clipping.utils.STATE_PROJECTED
+              and abs(pos.x - limit.min_x) < 1e-4,
+              f"state {spy.state()}, at {tuple(round(v, 4) for v in pos)}")
+        ev("ESC", "PRESS")
+        yield STEP
+    child.constraints.remove(limit)
+    bpy.data.objects.remove(bpy.data.objects["UI_Beyond"])
+    bpy.context.view_layer.update()
+    check("limit_location_esc_restores", not _running()
+          and (world() - start_world).length < 1e-5)
+
+    rv3d.view_perspective, rv3d.view_rotation, rv3d.view_location, rv3d.view_distance =         saved_view
+    rv3d.update()
+    yield STEP
 
     # A cycles Align Only (Off -> X -> Y); Esc puts it back, LMB keeps it
     yield from start_modal("align_key")

@@ -21,7 +21,11 @@ DEFAULT_SNAP_BEHAVIOR = SNAP_EXACT
 STATE_NONE = "NONE"        # snapping on, no snap point within reach
 STATE_FREE = "FREE"        # snapping switched off by holding Ctrl
 STATE_PULLING = "PULLING"  # pulled towards a snap point (Gradual Pull)
-STATE_SNAPPED = "SNAPPED"  # exactly on a snap point (or its constrained projection)
+STATE_SNAPPED = "SNAPPED"  # exactly on a snap point
+# Snap Exactly, but the moving point cannot get onto the snap point: an axis /
+# plane constraint, Location Lock or an object constraint keeps it off, so it
+# is as close as it can get (on the constraint: the projection).
+STATE_PROJECTED = "PROJECTED"
 
 # Snap To (scene setting).  The identifiers are stored in .blend files.
 SCOPE_ITEMS = [

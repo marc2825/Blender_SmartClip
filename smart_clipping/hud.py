@@ -8,7 +8,7 @@ colours.  Roles: ``"text"``, ``"muted"``, ``"accent"`` (the snap colour),
 import bpy
 
 from .i18n import iface
-from .utils import SCOPE_NAMES, SNAP_PULL, STATE_PULLING, STATE_SNAPPED
+from .utils import SCOPE_NAMES, SNAP_PULL, STATE_PROJECTED, STATE_PULLING, STATE_SNAPPED
 
 GAP = (None, "gap")
 
@@ -36,10 +36,16 @@ def target_text(cand) -> str:
 
 
 def candidate_runs(cand, state, distance_text=None) -> list:
-    """Label next to the snap point: state, what it is, and (pulling) how far."""
+    """Label next to the snap point: state, what it is, and how far it is.
+
+    Projected: Snap Exactly, but a constraint or Location Lock keeps the
+    moving point off the snap point (the distance says how far).
+    """
     runs = []
     if state == STATE_SNAPPED:
         runs.append((iface("Snapped"), "accent"))
+    elif state == STATE_PROJECTED:
+        runs.append((iface("Projected"), "accent"))
     elif state == STATE_PULLING:
         runs.append((iface("Pulling"), "accent"))
     runs.append((target_text(cand), "text"))

@@ -32,7 +32,7 @@ Case names are the keys of `CASES` in the runner. It exits with status 1 if any 
 
 ### UI
 
-The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+G`, mouse moves, constraint keys, `Ctrl`, `A`, `S`, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, exact snapping, `Ctrl`, right click cancelling, the `A` / `S` switches and their undo on cancel, the status bar, and Edit Mode. It keeps the sidebar open with the panels in the Item tab, so drawing errors in them fail the run.
+The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+G`, mouse moves, constraint keys, `Ctrl`, `A`, `S`, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, exact snapping, snap points the move cannot reach (a constraint, Lock Location or Limit Location: "Projected", with Undo / Redo / cancel), `Ctrl`, right click cancelling, the `A` / `S` switches (put back on cancel, one undo step when confirmed without moving), what the shortcut takes over, the status bar, and Edit Mode. It keeps the sidebar open with the panels in the Item tab, so drawing errors in them fail the run.
 
 ```sh
 blender --factory-startup --enable-event-simulate --python tests/ui_operator_test.py
