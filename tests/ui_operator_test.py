@@ -468,6 +468,42 @@ def _steps():
           len(bpy.context.window_manager.operators) == registered
           and (world() - start_world).length < 1e-9)
 
+    # Only A pressed, then confirmed without moving (#33): the setting is
+    # kept and is one undo step, which Undo puts back and Redo applies again.
+    # Same Mesh in Object Mode has no snap points, so nothing can snap.
+    # (The positions were put back by script above: make that the undo state.)
+    with bpy.context.temp_override(window=win, area=area):
+        bpy.ops.ed.undo_push(message="Smart Clipping UI test: before A only")
+    yield STEP
+    yield from start_modal("confirm_settings_only")
+    ev("A", "PRESS")
+    ev("A", "RELEASE")
+    yield STEP
+    ev("LEFTMOUSE", "PRESS")
+    ev("LEFTMOUSE", "RELEASE")
+    yield STEP
+    check("settings_only_confirm_kept", scene.smartclip_align_x and not _running()
+          and (world() - start_world).length < 1e-9)
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.ed.undo()
+    yield STEP
+    child = bpy.data.objects["UI_Child"]
+    target = bpy.data.objects["UI_Target"]
+    scene = bpy.context.scene
+    check("settings_only_undo", not scene.smartclip_align_x
+          and (world() - start_world).length < 1e-6,
+          f"align X {scene.smartclip_align_x}, off by {(world() - start_world).length:.4f}")
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.ed.redo()
+    yield STEP
+    child = bpy.data.objects["UI_Child"]
+    target = bpy.data.objects["UI_Target"]
+    scene = bpy.context.scene
+    check("settings_only_redo", scene.smartclip_align_x
+          and (world() - start_world).length < 1e-9)
+    scene.smartclip_align_x = False
+    yield STEP
+
     # Numpad views work mid-move and the selection does not jump
     yield from start_modal("numpad")
     ev("MOUSEMOVE", "NOTHING", dx=40)

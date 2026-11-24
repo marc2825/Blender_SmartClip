@@ -23,7 +23,7 @@ Mouse and numpad input works mid-move only where the keymap binds it to view nav
 
 Press the same key again to release an axis or plane constraint. Constraints use the global axes; a constrained axis is drawn in the theme's axis color, and snapped positions stay on the constrained axis or plane. A vertex off the axis or plane is projected onto it: the move goes to the nearest point on it and the label says "Projected".
 
-Settings switched with `A` and `S` are kept when you confirm and put back when you cancel.
+Settings switched with `A` and `S` are kept when you confirm and put back when you cancel. Confirming without moving keeps them too, as one operation, like changing them in the panel (in Object Mode, Undo with `Ctrl+Z` puts them back). Confirming when nothing changed records nothing.
 
 ## What the viewport shows during a move
 

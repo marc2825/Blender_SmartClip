@@ -638,18 +638,22 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
         # Confirm
         if event.type in {"LEFTMOUSE", "RET", "NUMPAD_ENTER"} and event.value == "PRESS":
+            scene = context.scene
             moved = (self.applied_world is not None
                      and (self.applied_world - self._start_world).length > 0.0)
-            if moved:
-                self.offset = self.applied_world - self._start_world
-                scene = context.scene
+            changed = _read_settings(scene) != self._settings_at_start
+            if moved or changed:
+                self.offset = (self.applied_world - self._start_world if moved
+                               else Vector((0.0, 0.0, 0.0)))
                 self.start_scope = self._settings_at_start[0]
                 self.final_scope = scene.smartclip_target_scope
                 self.final_align = tuple(getattr(scene, f"smartclip_align_{a}")
                                          for a in ("x", "y", "z"))
             self._finish(context)
-            # Nothing moved: no undo step and no redo panel entry
-            return {"FINISHED"} if moved else {"CANCELLED"}
+            # Nothing moved and nothing changed: no undo step and no redo
+            # panel entry.  Settings changed with A / S alone are one undo
+            # step, as when they are changed in the panel.
+            return {"FINISHED"} if moved or changed else {"CANCELLED"}
 
         # Pass through viewport navigation (orbit / pan / zoom / numpad views)
         if passes_to_navigation(context, event):
