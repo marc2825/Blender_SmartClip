@@ -9,6 +9,8 @@ fails, the key press falls through to Blender's own Shift+G.
 
 A different key is set on the user keymap items (the add-on preferences draw
 them, as does Preferences > Keymap), which Blender saves with the preferences.
+The preferences also say which of Blender's own functions the key takes over
+(overridden_name), so the trade-off of the default is visible where it is set.
 """
 
 import bpy
@@ -95,6 +97,30 @@ def user_items() -> list:
                 found.append((label, km, kmi))
                 break
     return found
+
+
+_KEY_FIELDS = ("type", "value", "any", "shift", "ctrl", "alt", "oskey", "key_modifier")
+
+
+def overridden_name(km, kmi) -> "str | None":
+    """Name of the active item in *km* (a user keymap) that *kmi* takes over.
+
+    The first other active item with the same key and modifiers, which the
+    key would run without Smart Clipping (Select Grouped / Select Similar
+    for Shift+G); None when there is none or *kmi* is off.
+    """
+    try:
+        if not kmi.active:
+            return None
+        key = tuple(getattr(kmi, f, None) for f in _KEY_FIELDS)
+        for other in km.keymap_items:
+            if other.idname == kmi.idname or not other.active:
+                continue
+            if tuple(getattr(other, f, None) for f in _KEY_FIELDS) == key:
+                return other.name or other.idname
+    except (ReferenceError, RuntimeError, AttributeError):
+        pass
+    return None
 
 
 def reset_to_default():

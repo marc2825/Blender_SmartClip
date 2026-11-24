@@ -1847,6 +1847,33 @@ def case_shortcut_reset():
         bpy.ops.smartclip.add_default_hotkeys()
 
 
+def case_shortcut_names_what_it_overrides():
+    # Issue #29: the preferences say what the key takes over.  Without a
+    # window Blender's own keymaps are empty, so a stand-in for Select Grouped
+    # is added after the add-on's item (the UI test checks the real ones).
+    from smart_clipping import keymap
+
+    km = bpy.context.window_manager.keyconfigs.addon.keymaps.get("Object Mode")
+    ours = next(k for k in km.keymap_items if k.idname == keymap.MOVE_IDNAME)
+    builtin = km.keymap_items.new("object.select_grouped", "G", "PRESS", shift=True)
+    other_key = km.keymap_items.new("object.select_all", "G", "PRESS", ctrl=True)
+    try:
+        bpy.ops.smartclip.add_default_hotkeys()
+        assert keymap.overridden_name(km, ours) == builtin.name, builtin.name
+        builtin.active = False
+        assert keymap.overridden_name(km, ours) is None
+        builtin.active = True
+        keymap.set_hotkeys_wanted(False)
+        assert keymap.overridden_name(km, ours) is None      # off: takes over nothing
+        keymap.set_hotkeys_wanted(True)
+        ours.type = "H"                                       # a key nothing else uses
+        assert keymap.overridden_name(km, ours) is None
+    finally:
+        km.keymap_items.remove(other_key)
+        km.keymap_items.remove(builtin)
+        bpy.ops.smartclip.add_default_hotkeys()
+
+
 def case_redo_keeps_move_settings():
     # Adjust Last Operation undoes, then calls execute() with the recorded
     # properties; Repeat Last calls it again.  Both must do what the move did.
@@ -1942,6 +1969,7 @@ CASES = {
     "build_summary": case_build_summary,
     "translations": case_translations,
     "shortcut_reset": case_shortcut_reset,
+    "shortcut_overrides": case_shortcut_names_what_it_overrides,
     "poll_without_active_object": case_poll_without_active_object,
     "redo_keeps_move_settings": case_redo_keeps_move_settings,
 }

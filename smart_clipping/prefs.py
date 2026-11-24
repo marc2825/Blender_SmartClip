@@ -3,6 +3,7 @@ from bpy.props import BoolProperty, EnumProperty, FloatVectorProperty, IntProper
 from bpy.types import AddonPreferences
 
 from . import keymap
+from .i18n import iface
 from .utils import (
     DEFAULT_SEARCH_BACKEND,
     DEFAULT_SNAP_BEHAVIOR,
@@ -154,8 +155,16 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
             # while it is off would not apply once it is on again.
             if self.hotkeys_enabled:
                 col = body.column()
-                for label, _km, kmi in keymap.user_items():
+                for label, km, kmi in keymap.user_items():
                     col.prop(kmi, "type", text=label, full_event=True)
+                    # Shift+G by default: say what it takes over, and how to keep it
+                    taken = keymap.overridden_name(km, kmi)
+                    if taken:
+                        # Under the key field, past the label column
+                        note = col.split(factor=0.4)
+                        note.label(text="")
+                        note.label(text=iface("Used instead of {name}").format(name=taken),
+                                   icon="INFO", translate=False)
             row = body.row()
             row.operator("smartclip.add_default_hotkeys", icon="LOOP_BACK")
 

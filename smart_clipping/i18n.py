@@ -46,6 +46,7 @@ MESSAGES = {
     "Set the shortcut back to Shift+G in Object Mode and mesh Edit Mode and turn it on":
         "オブジェクトモードとメッシュの編集モードのショートカットを Shift+G に戻し、オンにします",
     "Turn Off Shortcut": "ショートカットをオフにする",
+    "Used instead of {name}": "「{name}」の代わりに使われます",
     "Turn off the shortcut so the key does what Blender assigns to it":
         "ショートカットをオフにし、キーを Blender 本来の機能に戻します",
 

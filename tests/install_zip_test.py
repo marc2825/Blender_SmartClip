@@ -131,6 +131,15 @@ def main():
     kmi = user_object_mode_item()
     check("use_shortcut_on_keeps_custom_key", kmi is not None and kmi.active and kmi.type == "F",
           f"{kmi.type if kmi else None}")
+
+    # Switching the add-on off and on (or updating it) keeps the changed key
+    bpy.ops.preferences.addon_disable(module=MODULE)
+    bpy.ops.preferences.addon_enable(module=MODULE)
+    module = sys.modules[MODULE]
+    prefs = bpy.context.preferences.addons[MODULE].preferences
+    kmi = user_object_mode_item()
+    check("reenable_keeps_custom_key", kmi is not None and kmi.active and kmi.type == "F",
+          f"{kmi.type if kmi else None}")
     bpy.ops.smartclip.add_default_hotkeys()
     kmi = user_object_mode_item()
     check("reset_shortcut_restores_shift_g", kmi is not None and kmi.active and kmi.type == "G"

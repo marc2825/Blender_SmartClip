@@ -394,6 +394,23 @@ def _steps():
     # in main() sits right after ours, in front of Blender's own Shift+G.
     order = [k.idname for k in bpy.context.window_manager.keyconfigs.user
              .keymaps["Object Mode"].keymap_items if k.type == "G" and k.shift and not k.ctrl]
+    # What the default key takes over, as the preferences show it (#29):
+    # in Edit Mode Blender's Select Similar; in Object Mode the probe sits
+    # between it and Select Grouped.
+    bpy.context.window_manager.keyconfigs.update()
+    user_kc = bpy.context.window_manager.keyconfigs.user
+    taken = {label: smart_clipping.keymap.overridden_name(km, kmi)
+             for label, km, kmi in smart_clipping.keymap.user_items()}
+    # Select Similar is mesh.select_similar or, in newer versions, its menu
+    similar = next((k.name for k in user_kc.keymaps["Mesh"].keymap_items
+                    if k.type == "G" and k.shift and not (k.ctrl or k.alt) and k.active
+                    and k.idname != "view3d.smartclip_move"), None)
+    probe = next((k.name for k in user_kc.keymaps["Object Mode"].keymap_items
+                  if k.idname == "smartclip_test.probe"), None)
+    check("shortcut_names_what_it_overrides",
+          similar and taken == {"Object Mode": probe, "Edit Mode": similar},
+          f"{taken}; expected probe {probe!r}, Select Similar {similar!r}")
+
     check("probe_follows_smart_clipping",
           order[:2] == ["view3d.smartclip_move", "smartclip_test.probe"], str(order))
     try:

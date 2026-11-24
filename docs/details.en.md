@@ -90,7 +90,7 @@ The sidebar panel (**Tool** tab) holds what changes from task to task; its **Lim
 
 Snap To and Align Only are saved in the `.blend` file per scene; the others are add-on preferences.
 
-**Shortcut** in the add-on preferences: **Use Shortcut** turns the shortcut on or off, and turned off it stays off after restarting Blender. The key for Object Mode and Edit Mode can be changed there (or in Preferences → Keymap); **Reset Shortcut** sets `Shift+G` again and turns it on.
+**Shortcut** in the add-on preferences: the default `Shift+G` is used instead of Select Grouped in Object Mode and Select Similar in Edit Mode, and the preferences say so under the key (for a changed key, what that key would do). Both are still in the Select menu. **Use Shortcut** turns the shortcut on or off, and turned off it stays off after restarting Blender. The key for Object Mode and Edit Mode can be changed there (or in Preferences → Keymap); **Reset Shortcut** sets `Shift+G` again and turns it on.
 
 ## Language
 

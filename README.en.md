@@ -18,6 +18,8 @@ A Blender add-on that shows guide lines to nearby vertices while you move object
 
 Download `smart_clipping-vX.Y.Z.zip` from [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) and load it with **Preferences → Add-ons → Install from Disk** (**Install** on 4.1 and older). Do not unzip it.
 
+By default, `Shift+G` in Object Mode and Edit Mode is used instead of Blender's Select Grouped and Select Similar. Both are still in the Select menu. To keep them on `Shift+G`, change the key or turn off **Use Shortcut** in the add-on preferences.
+
 When upgrading from 1.1.x or earlier, disable and remove the old version (module `src`) first; enabling both makes their registrations collide. Add-on preferences start from their defaults, while Snap To and other settings saved in `.blend` files carry over.
 
 From 2.0, right click cancels a move, and a vertex within reach is snapped onto exactly without holding a button. To get the gradual pull of 1.x back, set **Snap Behavior** to **Gradual Pull** (sidebar panel > Limits and Display, or the add-on preferences).
