@@ -135,12 +135,13 @@ There is no `blender_manifest.toml` yet. With one, Blender 4.2+ installs the add
 
 - the newest released entry in `CHANGELOG.md`
 - `version` and `date-released` in `CITATION.cff`
+- the version badge in `README.md` and `README.en.md`
 
-The README shows the version through the release badge, so it needs no update.
+The badges are static (`img.shields.io/badge/...`): the ones that ask the GitHub API are often too slow for GitHub's image proxy and show up broken.
 
 ## Releasing
 
-1. Bump `bl_info["version"]`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff`. Run `python scripts/versioning.py`.
+1. Bump `bl_info["version"]`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff` and the README version badges. Run `python scripts/versioning.py`.
 2. Merge to `main` with CI passing.
 3. Optionally preview the package: `gh workflow run release-addon.yml -f version=X.Y.Z` builds the ZIP, checksum, and release notes as a workflow artifact without publishing anything.
 4. Tag the release commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.

@@ -1,14 +1,12 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Smart Clipping" width="720">
+  <img src="assets/logo.svg" alt="Smart Clipping" height="96" align="middle">
+  &nbsp;
+  <a href="https://github.com/marc2825/Blender_SmartClip/releases/latest"><img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version 2.0.0" align="middle"></a>
+  <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&amp;logoColor=white" alt="Blender 4.0+" align="middle"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" align="middle"></a>
+  <br>
+  <a href="README.md">日本語</a> | <a href="README.en.md">English</a>
 </p>
-
-# Smart Clipping
-
-[![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=version)](https://github.com/marc2825/Blender_SmartClip/releases/latest)
-[![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
-[![License: MIT](https://img.shields.io/github/license/marc2825/Blender_SmartClip)](LICENSE)
-
-[日本語](README.md) | [English](README.en.md)
 
 A Blender add-on that shows guide lines to nearby vertices while you move objects or vertices, and helps you snap to them. It is inspired by [Smart Guides](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3) in PowerPoint.
 
@@ -65,3 +63,7 @@ Developed with [Claude Code](https://claude.com/product/claude-code) (Anthropic)
 ## License
 
 [MIT License](LICENSE). Copyright (c) 2026 marc2825
+
+## Updates
+
+- **November 22, 2026:** Featured on [MODELING HAPPY](https://modelinghappy.com/archives/71644)! We are preparing to distribute the add-on.

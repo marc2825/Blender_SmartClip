@@ -13,8 +13,7 @@ Print the CHANGELOG section of a version (used as GitHub release notes):
 Checks:
   - CHANGELOG.md: newest released entry is ``## [X.Y.Z] - YYYY-MM-DD``
   - CITATION.cff: ``version`` and ``date-released`` match that entry
-
-The README shows the version through the release badge, so it is not checked.
+  - README.md / README.en.md: the static version badge shows the version
 """
 
 from __future__ import annotations
@@ -28,6 +27,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ADDON_DIR = "smart_clipping"
 
+_README_BADGE = re.compile(r"img\.shields\.io/badge/version-(?P<version>[0-9.]+)-")
+_READMES = ("README.md", "README.en.md")
 _CHANGELOG_ENTRY = re.compile(r"^## \[(?P<version>[^\]]+)\](?: - (?P<date>\d{4}-\d{2}-\d{2}))?", re.M)
 
 
@@ -89,6 +90,12 @@ def check(root: Path = ROOT) -> "list[str]":
         problems.append(f"CITATION.cff version is {cff_version}, bl_info is {version}")
     if cl_date and cff_date != cl_date:
         problems.append(f"CITATION.cff date-released is {cff_date}, CHANGELOG [{cl_version}] is {cl_date}")
+
+    for name in _READMES:
+        badges = _README_BADGE.findall((root / name).read_text(encoding="utf-8"))
+        if badges != [version]:
+            problems.append(f"{name} version badge shows {', '.join(badges) or 'nothing'}, "
+                            f"bl_info is {version}")
 
     return problems
 

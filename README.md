@@ -1,14 +1,12 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Smart Clipping" width="720">
+  <img src="assets/logo.svg" alt="Smart Clipping" height="96" align="middle">
+  &nbsp;
+  <a href="https://github.com/marc2825/Blender_SmartClip/releases/latest"><img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version 2.0.0" align="middle"></a>
+  <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&amp;logoColor=white" alt="Blender 4.0+" align="middle"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" align="middle"></a>
+  <br>
+  <a href="README.md">日本語</a> | <a href="README.en.md">English</a>
 </p>
-
-# Smart Clipping
-
-[![Release](https://img.shields.io/github/v/release/marc2825/Blender_SmartClip?label=version)](https://github.com/marc2825/Blender_SmartClip/releases/latest)
-[![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
-[![License: MIT](https://img.shields.io/github/license/marc2825/Blender_SmartClip)](LICENSE)
-
-[日本語](README.md) | [English](README.en.md)
 
 オブジェクトや頂点を移動するときに、近くの頂点へのガイド線を表示し、位置合わせ（スナップ）を手伝う Blender アドオンです。PowerPoint の[スマートガイド](https://support.microsoft.com/en-us/office/guides-for-arranging-things-on-a-slide-33854dfa-e0d1-43ff-8971-667b19512de3)を参考にしています。
 
@@ -65,3 +63,7 @@ python scripts/package_addon.py                                               # 
 ## ライセンス
 
 [MIT License](LICENSE)。Copyright (c) 2026 marc2825
+
+## 更新情報
+
+- **2026年11月22日:** [MODELING HAPPY](https://modelinghappy.com/archives/71644) で紹介されました！ 頒布の準備を進めています。
