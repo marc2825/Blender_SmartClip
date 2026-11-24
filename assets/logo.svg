@@ -2,11 +2,11 @@
   <title id="logo-title">Smart Clipping</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2d3036"/>
-      <stop offset="1" stop-color="#1b1d21"/>
+      <stop offset="0" stop-color="#14202f"/>
+      <stop offset="1" stop-color="#0d1520"/>
     </linearGradient>
     <pattern id="grid" width="22" height="22" patternUnits="userSpaceOnUse">
-      <path d="M22 0H0V22" fill="none" stroke="#ffffff" stroke-opacity="0.045" stroke-width="1"/>
+      <path d="M22 0H0V22" fill="none" stroke="#7fb2e5" stroke-opacity="0.09" stroke-width="1"/>
     </pattern>
     <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
       <feGaussianBlur stdDeviation="4"/>
@@ -16,31 +16,45 @@
   <rect width="800" height="220" rx="24" fill="url(#bg)"/>
   <rect width="800" height="220" rx="24" fill="url(#grid)"/>
 
-  <g transform="translate(40 0)">
-  <!-- reference cube -->
-  <g stroke="#8b949e" stroke-width="2" stroke-linejoin="round">
-    <path d="M100 66 L145 92 L100 118 L55 92 Z" fill="#4a5059"/>
-    <path d="M55 92 L100 118 L100 170 L55 144 Z" fill="#373c43"/>
-    <path d="M100 118 L145 92 L145 144 L100 170 Z" fill="#2c3036"/>
-  </g>
+  <!-- the guide: both cubes and the name stand on it -->
+  <line x1="24" y1="124" x2="776" y2="124" stroke="#ff3dff" stroke-width="2" stroke-dasharray="7 5" stroke-linecap="round"/>
 
-  <!-- moving cube (selected: Blender's orange outline) -->
-  <g stroke="#ffa033" stroke-width="2.5" stroke-linejoin="round">
-    <path d="M215 66 L244.4 83 L215 100 L185.6 83 Z" fill="#5b6270"/>
-    <path d="M185.6 83 L215 100 L215 134 L185.6 117 Z" fill="#444a55"/>
-    <path d="M215 100 L244.4 83 L244.4 117 L215 134 Z" fill="#383d47"/>
+  <!-- reference cube: edges and vertices -->
+  <g fill="none" stroke="#9fb6cc" stroke-width="1.8" stroke-linejoin="round">
+    <path d="M118 89.4 L148 72 L118 54.7 L88 72 Z"/>
+    <path d="M88 72 L88 106.7 L118 124 L148 106.7 L148 72"/>
+    <path d="M118 89.4 L118 124"/>
   </g>
+  <g fill="#dbe7f3">
+    <circle cx="118" cy="89.4" r="3.2"/>
+    <circle cx="88" cy="72" r="3.2"/>
+    <circle cx="148" cy="72" r="3.2"/>
+    <circle cx="118" cy="54.7" r="3.2"/>
+    <circle cx="88" cy="106.7" r="3.2"/>
+    <circle cx="148" cy="106.7" r="3.2"/>
+  </g>
+  <circle cx="118" cy="124" r="4.5" fill="#ff3dff"/>
 
-  <!-- smart guide aligning the top vertices -->
-  <line x1="36" y1="66" x2="266" y2="66" stroke="#ff3dff" stroke-width="2" stroke-dasharray="7 5" stroke-linecap="round"/>
-  <circle cx="100" cy="66" r="4.5" fill="#ff3dff"/>
+  <!-- moving cube (selected: Blender's orange) -->
+  <g fill="none" stroke="#ffa033" stroke-width="2.2" stroke-linejoin="round">
+    <path d="M682 97.4 L705 84.2 L682 70.9 L659 84.2 Z"/>
+    <path d="M659 84.2 L659 110.7 L682 124 L705 110.7 L705 84.2"/>
+    <path d="M682 97.4 L682 124"/>
+  </g>
+  <g fill="#ffc27a">
+    <circle cx="682" cy="97.4" r="3.2"/>
+    <circle cx="659" cy="84.2" r="3.2"/>
+    <circle cx="705" cy="84.2" r="3.2"/>
+    <circle cx="682" cy="70.9" r="3.2"/>
+    <circle cx="659" cy="110.7" r="3.2"/>
+    <circle cx="705" cy="110.7" r="3.2"/>
+  </g>
 
   <!-- snap point -->
-  <circle cx="215" cy="66" r="10" fill="#00e5ff" opacity="0.55" filter="url(#glow)"/>
-  <circle cx="215" cy="66" r="5.5" fill="#00e5ff"/>
+  <circle cx="682" cy="124" r="10" fill="#00e5ff" opacity="0.55" filter="url(#glow)"/>
+  <circle cx="682" cy="124" r="5.5" fill="#00e5ff"/>
 
-  <!-- wordmark -->
-  <text x="300" y="112" fill="#f2f4f7" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="54" font-weight="700" letter-spacing="0.5">Smart Clipping</text>
-  <text x="302" y="150" fill="#a5adb8" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="21">Smart guides and snapping for Blender</text>
-  </g>
+  <!-- wordmark, centred so it stays in the middle with any of the fonts -->
+  <text x="400" y="124" text-anchor="middle" fill="#f2f4f7" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="62" font-weight="600" letter-spacing="0.5">Smart Clipping</text>
+  <text x="400" y="168" text-anchor="middle" fill="#8fa9c4" font-family="ui-monospace, 'Cascadia Code', Consolas, Menlo, monospace" font-size="17">Smart guides and snapping for Blender</text>
 </svg>
