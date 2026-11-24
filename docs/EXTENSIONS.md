@@ -26,7 +26,7 @@ Upload `snaxis-vX.Y.Z-extension.zip` from the GitHub release (the same file `pyt
 Paste into the description field (Markdown). It describes only what the current version does.
 
 ```markdown
-Snaxis (formerly Smart Clipping) shows guide lines to nearby vertices while you move objects or vertices in the 3D Viewport, and snaps exactly onto them — like the smart guides in PowerPoint, for lining things up by eye without typing coordinates.
+Snaxis (formerly Smart Clipping) shows guide lines to nearby vertices while you move objects or vertices in the 3D Viewport, and snaps exactly onto them — or lines up just one axis (X, Y or Z) with them. It works like the smart guides in PowerPoint, for lining things up by eye without typing coordinates.
 
 ### Features
 
