@@ -163,6 +163,30 @@ The workflows get Blender through `.github/scripts/fetch-blender.sh`: the archiv
 
 `scripts/package_addon.py` writes files in a fixed order with fixed timestamps, so the same sources always produce the same ZIP and checksum.
 
+## Tested environments
+
+What was checked for the latest release, and what was not. Update it with each release.
+
+**2.0.2** (2026-11-24)
+
+| Where | Blender | What | Result |
+|---|---|---|---|
+| Windows 11, real display (Intel Core i7-12700F, 16 GB) | 4.0.2, 4.2.23 LTS, 5.2.4 LTS | UI test with the grid, the KD-tree, and the Japanese interface | 91 / 91 each, no skipped checks (`Ctrl` included) |
+| Same | 5.3.0 | UI test with the grid, the KD-tree, Japanese, interface scale 2, light theme; screenshots of the overlays looked at | 91 / 91 each |
+| Same | 4.0.2, 4.2.23, 5.2.4, 5.3.0 | ZIP install test: fresh, over 1.3.2 without a restart, off / on, removal | 16 / 16 and 19 / 19 each |
+| Same | 5.3.0 | Add-on preferences in English and Japanese (screenshots) | Shortcut notes shown under the keys |
+| Same | 5.3.0, 4.0.2 | Headless tests | All pass on 5.3.0; on 4.0.2 all but `translations`, which needs Python's `string` module that the portable copy used lacks (passes in CI) |
+| GitHub Actions, Linux, Xvfb | 4.0.2, 4.2.23, 5.2.4 | UI test with the grid and the KD-tree | 91 / 91 each |
+| GitHub Actions, Linux | 4.0.2, 4.2.23, 5.2.4 | Headless tests, ZIP contents, install tests | All pass |
+
+Found and fixed on the way: the snap point label went under the sidebar at interface scale 2, and the Adjust Last Operation panel of the previous move covered the lower-left lines.
+
+Not checked:
+
+- macOS, and Linux on a real display (only the virtual display in CI)
+- a real HiDPI monitor (interface scale 2 stands in for it), several windows, Quad View, pen tablets
+- how snapping feels to a person (`tests/manual_ui_setup.py` builds a scene for that)
+
 ## Distribution
 
 The add-on is distributed as a legacy add-on ZIP (`bl_info`, module `smart_clipping`) from GitHub Releases, and supports Blender 4.0 and later. The ZIP contains `smart_clipping/LICENSE`.
