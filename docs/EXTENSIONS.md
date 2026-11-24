@@ -74,6 +74,13 @@ In [assets/listing/](../assets/listing/), made from the actual interface of Blen
 | `screenshot-3-align-x-with-own-mesh.png` | 1920 × 1080 | Preview: the same, lined up with a vertex of its own mesh |
 | `demo.mp4` | 1920 × 1080, 17 s, 0.8 MB | Preview video, if the form takes one |
 
+Captions for the previews (top: perspective view, bottom: front view, both of the same move in Edit Mode):
+
+1. `screenshot-1-snap-to-vertex.png`: "Snap to vertices: the moving vertex lands exactly on a corner of another box, with a guide line and a label showing what it snapped to and how far it moved."
+2. `screenshot-2-align-x-with-other-box.png`: "Line up one axis: with Align Only X and the X constraint, the vertex slides along X and stops where its X coordinate matches a vertex of the tall box."
+3. `screenshot-3-align-x-with-own-mesh.png`: "Align Only also finds vertices of the mesh being edited: here the X coordinate lines up with another vertex of the same cube."
+4. `demo.mp4`: "A full move: snap onto another box's corner, press A and X, slide along X through the boxes on both sides, then confirm with a left click."
+
 The platform's upload form (behind Blender ID sign-in) was not available when these were made, so its exact requirements are not known here. Published listings show 16:9 preview images (1920 × 1080 with 640 × 360 thumbnails), which these follow. If the form asks for other sizes, re-export from the same sources. The moderation guidelines discourage heavy GIFs in the description, so `assets/teaser.gif` is not used there.
 
 None of the images shows the Blender logo (terms 2.2). The Blender interface itself appears in the screenshots, as in other listings.
