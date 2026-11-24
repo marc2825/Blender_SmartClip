@@ -8,17 +8,17 @@ From 2.1.0 every release has two ZIPs with the same add-on inside:
 
 | ZIP | Blender | Installs as |
 |---|---|---|
-| `smart_clipping-vX.Y.Z-extension.zip` | 4.2 or later | An extension (module `bl_ext.user_default.smart_clipping` when installed from disk) |
-| `smart_clipping-vX.Y.Z.zip` | 4.0 or later | A legacy add-on (module `smart_clipping`) |
+| `snaxis-vX.Y.Z-extension.zip` | 4.2 or later | An extension (module `bl_ext.user_default.snaxis` when installed from disk) |
+| `snaxis-vX.Y.Z.zip` | 4.0 or later | A legacy add-on (module `smart_clipping`) |
 
 On Blender 4.2 or later, use the extension. Both are installed with **Preferences → Add-ons → Install from Disk** (on 4.2 or later you can also drag the ZIP into Blender); do not unzip them.
 
-**Only one at a time.** Both register the same tool, panel, scene settings and shortcut, so only one can be on. Enabling the second one fails with "Smart Clipping is already enabled as …", naming the one that is on, and leaves that one as it was. Versions before 2.1.0 do not check this, so update or remove an older legacy add-on before installing the extension.
+**Only one at a time.** Both register the same tool, panel, scene settings and shortcut, so only one can be on. Enabling the second one fails with "Snaxis is already enabled as …", naming the one that is on, and leaves that one as it was. Versions before 2.1.0 do not check this, so update or remove an older legacy add-on before installing the extension. The 2.1.0 extension (still named Smart Clipping, id `smart_clipping`) counts as another copy: remove it before installing the `snaxis` extension.
 
 **Moving from the legacy add-on to the extension:**
 
 1. Note your add-on preferences (Snap Behavior, Snap Distance, Snap Point Limit, the colors, Snap Search, Use Shortcut) and a changed shortcut key. They do not carry over: Blender keeps them per add-on, and the extension starts from the defaults.
-2. In **Preferences → Add-ons**, turn the legacy Smart Clipping off and remove it.
+2. In **Preferences → Add-ons**, turn the legacy add-on off and remove it (listed as Snaxis, or Smart Clipping up to 2.1.0).
 3. Install the extension ZIP, enable it, and set the preferences and key again.
 
 Snap To, its collection and Align Only are saved in each `.blend` file, so they carry over. Moving back works the same way.
@@ -96,11 +96,11 @@ Turning on X, Y, or Z under **Align Only** (in the panel, or with `A` during a m
 
 ## Settings
 
-The sidebar panel (**Tool** tab) holds what changes from task to task; its **Limits and Display** sub-panel and the add-on preferences (**Preferences → Add-ons → Smart Clipping**) hold the rest.
+The sidebar panel (**Tool** tab) holds what changes from task to task; its **Limits and Display** sub-panel and the add-on preferences (**Preferences → Add-ons → Snaxis**) hold the rest.
 
 | Setting | Where | Default | Meaning |
 |---|---|---|---|
-| Checkbox in the panel header | Panel | On | Use Smart Clipping in this scene. Off: the shortcut key (`Shift+G` unless changed) does what Blender assigns to it here |
+| Checkbox in the panel header | Panel | On | Use Snaxis in this scene. Off: the shortcut key (`Shift+G` unless changed) does what Blender assigns to it here |
 | Snap To | Panel | Visible Objects | Which meshes to snap to ([Snap To](#snap-to)) |
 | Align Only | Panel | Off | Line up a coordinate instead of snapping onto vertices ([Align Only](#align-only)) |
 | Snap Distance | Panel, preferences | 30 px | How close on screen the moving point must come to a snap point |
@@ -195,7 +195,7 @@ In measurements the Screen-space Grid was faster in almost every case: with 100,
 
 Errors are shown in the system console (on Windows, Window > Toggle System Console).
 
-### "Smart Clipping is already enabled as …"
+### "Snaxis is already enabled as …"
 
 The extension and the legacy add-on are both installed and the other one is on. Turn that one off first; see [Extension or legacy add-on](#extension-or-legacy-add-on).
 

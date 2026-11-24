@@ -1,6 +1,6 @@
 # Support
 
-Ask usage questions and share ideas in [Discussions](https://github.com/marc2825/Blender_SmartClip/discussions). Report bugs you can reproduce in [Issues](https://github.com/marc2825/Blender_SmartClip/issues).
+Ask usage questions and share ideas in [Discussions](https://github.com/marc2825/Snaxis/discussions). Report bugs you can reproduce in [Issues](https://github.com/marc2825/Snaxis/issues).
 
 Security problems are not reported in public: see [SECURITY.md](SECURITY.md) for the private report form.
 

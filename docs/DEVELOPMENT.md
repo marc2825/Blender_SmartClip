@@ -47,9 +47,9 @@ blender --factory-startup --enable-event-simulate --python-exit-code 1 --python 
 - Set `SMARTCLIP_UI_SCREENSHOT_DIR` to a folder to save screenshots of the overlays.
 - Set `SMARTCLIP_UI_BACKEND=KDTREE` to run the checks with the KD-tree search instead of the default grid.
 - Set `SMARTCLIP_UI_LANGUAGE=ja_JP` to run them with the interface in Japanese.
-- Set `SMARTCLIP_UI_MODULE=bl_ext.user_default.smart_clipping` (and the user folders the extension is installed in, without `--factory-startup`) to test the installed extension instead of the source folder.
+- Set `SMARTCLIP_UI_MODULE=bl_ext.user_default.snaxis` (and the user folders the extension is installed in, without `--factory-startup`) to test the installed extension instead of the source folder.
 - Set `SMARTCLIP_UI_SCALE=2` to run them at a larger interface scale (as on HiDPI displays), and `SMARTCLIP_UI_THEME=light` to use Blender's light theme; look at the screenshots for these.
-- Some virtual X11 displays report `Ctrl` as released right after a simulated press. The `Ctrl` check then prints `[SKIP]` with the events the move received, instead of failing ([#26](https://github.com/marc2825/Blender_SmartClip/issues/26)).
+- Some virtual X11 displays report `Ctrl` as released right after a simulated press. The `Ctrl` check then prints `[SKIP]` with the events the move received, instead of failing ([#26](https://github.com/marc2825/Snaxis/issues/26)).
 
 ### On a virtual display
 
@@ -78,17 +78,27 @@ Registered messages apply to all of Blender, so a word Blender already translate
 ```sh
 python scripts/package_addon.py --output-dir /tmp/dist
 BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER_CONFIG=/tmp/bl/config \
-  blender --background --factory-startup --python-exit-code 1 --python tests/install_zip_test.py -- /tmp/dist/smart_clipping-vX.Y.Z.zip
+  blender --background --factory-startup --python-exit-code 1 --python tests/install_zip_test.py -- /tmp/dist/snaxis-vX.Y.Z.zip
 ```
 
-With `--upgrade-from OLD.zip` before the ZIP, it first installs and enables `OLD.zip`, then installs the new ZIP over it and switches the add-on off and on without a restart, as a user updating from the Preferences does. CI runs this from 1.3.2 ([#23](https://github.com/marc2825/Blender_SmartClip/issues/23)).
+With `--upgrade-from OLD.zip` before the ZIP, it first installs and enables `OLD.zip`, then installs the new ZIP over it and switches the add-on off and on without a restart, as a user updating from the Preferences does. CI runs this from 1.3.2 ([#23](https://github.com/marc2825/Snaxis/issues/23)).
+
+`tests/upgrade_settings_test.py` checks that an update keeps the user's settings: in one Blender session it installs and enables an older ZIP, changes every preference and the key, and installs the new ZIP over it; the next session (without `--factory-startup`) must load the new version with those settings. CI runs it from 2.1.0, the last release named Smart Clipping (downloaded from its release and checked against its `.sha256`):
+
+```sh
+BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER_CONFIG=/tmp/bl/config \
+  blender --background --factory-startup --python-exit-code 1 --python tests/upgrade_settings_test.py -- \
+    --phase before smart_clipping-v2.1.0.zip /tmp/dist/snaxis-vX.Y.Z.zip
+(same variables) blender --background --python-exit-code 1 --python tests/upgrade_settings_test.py -- \
+    --phase after smart_clipping-v2.1.0.zip /tmp/dist/snaxis-vX.Y.Z.zip
+```
 
 `scripts/package_addon.py` builds both ZIPs from the same files, with an explicit list of what goes in: the files of `smart_clipping/` that git tracks and whose suffix is in `SOURCE_SUFFIXES` (`.py`), plus `LICENSE`, and `smart_clipping/blender_manifest.toml` in the extension only.
 
 | ZIP | Layout | For |
 |---|---|---|
-| `smart_clipping-vX.Y.Z.zip` | `smart_clipping/` with the sources and `LICENSE`, no manifest | Blender 4.0+ as a legacy add-on (4.2+ installs it as one too) |
-| `smart_clipping-vX.Y.Z-extension.zip` | The sources, `LICENSE` and `blender_manifest.toml` at the root, as `blender --command extension build` lays them out | Blender 4.2+ and extensions.blender.org |
+| `snaxis-vX.Y.Z.zip` | `smart_clipping/` with the sources and `LICENSE`, no manifest | Blender 4.0+ as a legacy add-on (4.2+ installs it as one too) |
+| `snaxis-vX.Y.Z-extension.zip` | The sources, `LICENSE` and `blender_manifest.toml` at the root, as `blender --command extension build` lays them out | Blender 4.2+ and extensions.blender.org |
 
 Untracked files (caches, local notes, settings) never go in, and a tracked file of another kind (another `.toml` included) stops the build until the lists cover it. The manifest must have the version of `bl_info`. Each ZIP gets a `.sha256`. `tests/package_test.py` (plain Python, no Blender) checks the lists, the exact contents and layout of both ZIPs, that the sources, `LICENSE` and manifest are the repository's, the SPDX lines, the fixed metadata, that two builds are byte-identical, the checksums, and the manifest rules a build does not check (version, license, a tagline of up to 64 characters without end punctuation or "Blender", no empty values, no permissions):
 
@@ -102,23 +112,23 @@ Blender's own tools check the manifest and the ZIP (Blender 4.2+):
 
 ```sh
 blender --command extension validate smart_clipping
-blender --command extension validate dist/smart_clipping-vX.Y.Z-extension.zip
+blender --command extension validate dist/snaxis-vX.Y.Z-extension.zip
 ```
 
 `tests/extension_install_test.py` installs the extension ZIP with the operator Install from Disk uses, into the User Default repository, in two Blender sessions with the same disposable user folders:
 
-- `install` (with `--factory-startup`): it registers under `bl_ext.user_default.smart_clipping` (operator, panels, scene properties, keymap items, translations, preferences) with no top-level `smart_clipping` module; every preference and the key are changed and saved. Then the legacy ZIP is installed and enabling it must fail with the "already enabled" message, leaving the extension exactly as it was through the legacy add-on being disabled and removed.
+- `install` (with `--factory-startup`): it registers under `bl_ext.user_default.snaxis` (operator, panels, scene properties, keymap items, translations, preferences) with no top-level `smart_clipping` module; every preference and the key are changed and saved. Then the legacy ZIP is installed and enabling it must fail with the "already enabled" message, leaving the extension exactly as it was through the legacy add-on being disabled and removed.
 - `reload` (without `--factory-startup`): the extension is enabled again at start-up with the saved preferences and key. Then the other order: the extension off (nothing left registered), the legacy add-on on, scene settings carried over and its preferences and key at their defaults, the extension refused and uninstalled with the legacy add-on untouched, and finally the extension installed again on its defaults and saved.
 
 ```sh
 export BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts \
        BLENDER_USER_CONFIG=/tmp/bl/config BLENDER_USER_EXTENSIONS=/tmp/bl/extensions
 blender --background --factory-startup --python-exit-code 1 --python tests/extension_install_test.py -- \
-  --phase install dist/smart_clipping-vX.Y.Z-extension.zip dist/smart_clipping-vX.Y.Z.zip
+  --phase install dist/snaxis-vX.Y.Z-extension.zip dist/snaxis-vX.Y.Z.zip
 blender --background --python-exit-code 1 --python tests/extension_install_test.py -- \
-  --phase reload dist/smart_clipping-vX.Y.Z-extension.zip dist/smart_clipping-vX.Y.Z.zip
+  --phase reload dist/snaxis-vX.Y.Z-extension.zip dist/snaxis-vX.Y.Z.zip
 blender --background --python-exit-code 1 --python tests/headless_test_runner.py -- \
-  --module bl_ext.user_default.smart_clipping
+  --module bl_ext.user_default.snaxis
 ```
 
 The last line runs every headless case against the installed extension.
@@ -133,7 +143,7 @@ blender --background --factory-startup --python-exit-code 1 --python tests/bench
 
 #### Grid vs. KD-tree
 
-Measured for [#19](https://github.com/marc2825/Blender_SmartClip/issues/19) with Blender 5.3.0 on Windows 11 (Intel Core Ultra 9 285K), default options: 200 timed queries, 12 view changes, and 40 queries with full candidate lists per case. The clouds fill a 10-unit cube ("crowded": 95% of the points in a blob with σ = 0.05) and are seen in perspective from about 23 units away at 1600 × 900 px; Snap Threshold is 30 px. Times in milliseconds.
+Measured for [#19](https://github.com/marc2825/Snaxis/issues/19) with Blender 5.3.0 on Windows 11 (Intel Core Ultra 9 285K), default options: 200 timed queries, 12 view changes, and 40 queries with full candidate lists per case. The clouds fill a 10-unit cube ("crowded": 95% of the points in a blob with σ = 0.05) and are seen in perspective from about 23 units away at 1600 × 900 px; Snap Threshold is 30 px. Times in milliseconds.
 
 | Cloud | Points | Index build, grid / KD-tree | Mouse move, grid (median / p95) | Mouse move, KD-tree (median / p95) | First move after a view change, grid / KD-tree (median) |
 |---|---|---|---|---|---|
@@ -166,7 +176,7 @@ blender --background --factory-startup --python-exit-code 1 --python tests/bench
   --verts 4000000 --objects 1 --budget 50000
 ```
 
-Measured for [#30](https://github.com/marc2825/Blender_SmartClip/issues/30) on a GitHub-hosted runner (Linux, 4 vCPUs, 16 GB). The memory column is the growth of the resident set during the collection, over what the scene already used ("scene").
+Measured for [#30](https://github.com/marc2825/Snaxis/issues/30) on a GitHub-hosted runner (Linux, 4 vCPUs, 16 GB). The memory column is the growth of the resident set during the collection, over what the scene already used ("scene").
 
 | Evaluated vertices | Objects | Snap Point Limit | Start of a move, 4.0.2 / 5.2.4 (s) | Memory growth, 4.0.2 / 5.2.4 (MiB) | Scene, 5.2.4 (MiB) |
 |---|---|---|---|---|---|
@@ -189,7 +199,7 @@ Measured for [#30](https://github.com/marc2825/Blender_SmartClip/issues/30) on a
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, release ZIP contents check, compile check, headless tests and legacy ZIP install tests (fresh, and over 1.3.2) on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4; on 4.2.23, 5.2.4 and 5.3.0 the extension: Blender's validate and build, [Extension](#extension)'s install tests, and the headless tests against the installed extension |
+| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, release ZIP contents check, compile check, headless tests and legacy ZIP install tests (fresh, over 1.3.2, and over 2.1.0 keeping the settings across a restart) on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4; on 4.2.23, 5.2.4 and 5.3.0 the extension: Blender's validate and build, [Extension](#extension)'s install tests, and the headless tests against the installed extension |
 | `codeql.yml` | Pushes, pull requests, monthly | CodeQL scan of the Python code |
 | `release-addon.yml` | `v*.*.*` tags, manual runs | UI tests as a gate (the source folder, and the installed extension), then packages both ZIPs, installs the legacy ZIP into Blender 4.0.2, validates and installs the extension into 4.2.23, and publishes a release (see below) |
 | `ui-tests.yml` | Manual, and called by `release-addon.yml` | UI test on a virtual display, on the source folder or the installed extension |
@@ -228,19 +238,21 @@ Not checked:
 
 ## Distribution
 
-From 2.1.0 the same sources ship in two ZIPs on GitHub Releases ([#38](https://github.com/marc2825/Blender_SmartClip/issues/38)): the legacy add-on (`bl_info`, module `smart_clipping`, Blender 4.0+) and the extension (`blender_manifest.toml`, module `bl_ext.<repository>.smart_clipping`, Blender 4.2+), which is also what goes to extensions.blender.org. [docs/EXTENSIONS.md](EXTENSIONS.md) has the listing text, the check against the platform's rules, and the submission steps.
+From 2.1.0 the same sources ship in two ZIPs on GitHub Releases ([#38](https://github.com/marc2825/Snaxis/issues/38)): the legacy add-on (`bl_info`, module `smart_clipping`, Blender 4.0+) and the extension (`blender_manifest.toml`, module `bl_ext.<repository>.snaxis`, Blender 4.2+), which is also what goes to extensions.blender.org. [docs/EXTENSIONS.md](EXTENSIONS.md) has the listing text, the check against the platform's rules, and the submission steps.
+
+**Name.** The add-on was called Smart Clipping up to 2.1.0 and is Snaxis from 2.1.1 (the repository moved from `Blender_SmartClip` to `Snaxis`; GitHub redirects the old links). Everything users see says Snaxis: `bl_info` and manifest names, the panel, messages, the docs, the logo, and the ZIPs (`snaxis-vX.Y.Z.zip`, `snaxis-vX.Y.Z-extension.zip`). For compatibility the internal identifiers did not change: the source folder and the legacy add-on's module `smart_clipping` (so that installing over Smart Clipping keeps the preferences and key, `tests/upgrade_settings_test.py`), the operator ids `view3d.smartclip_move` and `smartclip.*` (keymaps and scripts), the Scene properties `smartclip_*` (values saved in `.blend` files), the class and panel names `SMARTCLIP_*`, and the `SMARTCLIP_UI_*` test variables. The extension, not yet on the platform at the rename, took the id `snaxis`; the 2.1.0 extension from GitHub (id `smart_clipping`) is another copy to the check below.
 
 What differs between the two at run time:
 
 - **Module name**: the code uses `__package__` (preferences, translations) and never a literal module name.
 - **`bl_info`**: kept for the legacy add-on; Blender ignores it in an extension and uses the manifest.
-- **Updating in place**: the legacy add-on drops its own old submodules from `sys.modules` when it is re-enabled after an update (`__init__.py`, [#23](https://github.com/marc2825/Blender_SmartClip/issues/23)). Only a top-level module does this: Blender's extension manager unloads an extension's submodules itself, and the platform asks extensions to leave `sys` alone.
+- **Updating in place**: the legacy add-on drops its own old submodules from `sys.modules` when it is re-enabled after an update (`__init__.py`, [#23](https://github.com/marc2825/Snaxis/issues/23)). Only a top-level module does this: Blender's extension manager unloads an extension's submodules itself, and the platform asks extensions to leave `sys` alone.
 - **Both enabled**: they register the same operators, panels, Scene properties and keymap items. `register()` first looks for the panel of another copy (`bpy.types.SMARTCLIP_PT_panel` from another module) and raises `AlreadyEnabledError` before registering anything, so Blender leaves the second copy off with that message, never calls its `unregister()`, and the first copy keeps everything. Copies from two extension repositories are told apart the same way. Versions before 2.1.0 do not check.
 - **Preferences and a changed key** are stored per module name, so they do not carry over between the two; scene settings (stored in the `.blend` file) do. The guide tells users how to switch.
 
 ### License and publishing conditions
 
-The whole repository is GPL-3.0-or-later from 2.0.3 ([#20](https://github.com/marc2825/Blender_SmartClip/issues/20)). Releases up to 2.0.2 were published under MIT and stay so. Every Python file starts with `SPDX-FileCopyrightText` and `SPDX-License-Identifier: GPL-3.0-or-later`; add the same two lines to new files.
+The whole repository is GPL-3.0-or-later from 2.0.3 ([#20](https://github.com/marc2825/Snaxis/issues/20)). Releases up to 2.0.2 were published under MIT and stay so. Every Python file starts with `SPDX-FileCopyrightText` and `SPDX-License-Identifier: GPL-3.0-or-later`; add the same two lines to new files.
 
 | Channel | License | Conditions |
 |---|---|---|
@@ -271,6 +283,6 @@ The badges are static (`img.shields.io/badge/...`): the ones that ask the GitHub
 5. Install the published ZIPs in Blender once to confirm they load.
 6. Upload the published extension ZIP to extensions.blender.org as a new version ([docs/EXTENSIONS.md](EXTENSIONS.md)).
 
-The changelog section becomes the body of the GitHub release, so keep it short and written for users. The release workflow fails if the tag does not match `bl_info`; otherwise it attaches `smart_clipping-vX.Y.Z.zip`, `smart_clipping-vX.Y.Z-extension.zip` and a `.sha256` for each.
+The changelog section becomes the body of the GitHub release, so keep it short and written for users. The release workflow fails if the tag does not match `bl_info`; otherwise it attaches `snaxis-vX.Y.Z.zip`, `snaxis-vX.Y.Z-extension.zip` and a `.sha256` for each.
 
 `python scripts/package_addon.py` builds the same ZIPs locally in `dist/` (`--format legacy` or `extension` for one of them).

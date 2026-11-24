@@ -1,23 +1,24 @@
 # Blender Extensions submission
 
-What goes to [extensions.blender.org](https://extensions.blender.org/) for Smart Clipping, checked against the platform's rules, and how to submit it. Work tracked in [#38](https://github.com/marc2825/Blender_SmartClip/issues/38).
+What goes to [extensions.blender.org](https://extensions.blender.org/) for Snaxis (formerly Smart Clipping), checked against the platform's rules, and how to submit it. Work tracked in [#38](https://github.com/marc2825/Snaxis/issues/38).
 
-**Status: not submitted yet.** Do not describe Smart Clipping as available on the platform until the listing is approved.
+**Status: not submitted yet.** Do not describe Snaxis as available on the platform until the listing is approved.
 
 ## Package
 
-Upload `smart_clipping-vX.Y.Z-extension.zip` from the GitHub release (the same file `python scripts/package_addon.py` builds; check it against the `.sha256` next to it). The site reads these from its `blender_manifest.toml`; to change them, change the manifest and upload a new version:
+Upload `snaxis-vX.Y.Z-extension.zip` from the GitHub release (the same file `python scripts/package_addon.py` builds; check it against the `.sha256` next to it). The site reads these from its `blender_manifest.toml`; to change them, change the manifest and upload a new version:
 
 | Field | Value |
 |---|---|
-| Name | Smart Clipping |
+| Name | Snaxis |
+| Id | `snaxis` (permanent once listed) |
 | Tagline | Smart guides that snap moves to nearby vertices |
 | Type | Add-on |
 | Tags | 3D View, Modeling, Mesh |
 | Blender | 4.2.0 and later (4.0 / 4.1: the legacy ZIP on GitHub) |
 | License | GPL-3.0-or-later |
 | Copyright | 2026 marc2825 |
-| Website | https://github.com/marc2825/Blender_SmartClip |
+| Website | https://github.com/marc2825/Snaxis |
 | Permissions | None (no files, network, clipboard, camera or microphone) |
 
 ## Listing text
@@ -25,7 +26,7 @@ Upload `smart_clipping-vX.Y.Z-extension.zip` from the GitHub release (the same f
 Paste into the description field (Markdown). It describes only what the current version does.
 
 ```markdown
-Smart Clipping shows guide lines to nearby vertices while you move objects or vertices in the 3D Viewport, and snaps exactly onto them — like the smart guides in PowerPoint, for lining things up by eye without typing coordinates.
+Snaxis (formerly Smart Clipping) shows guide lines to nearby vertices while you move objects or vertices in the 3D Viewport, and snaps exactly onto them — like the smart guides in PowerPoint, for lining things up by eye without typing coordinates.
 
 ### Features
 
@@ -43,21 +44,21 @@ Smart Clipping shows guide lines to nearby vertices while you move objects or ve
 2. Move the mouse: guide lines appear near vertices, and the point snaps onto them.
 3. Left click or `Enter` confirms, right click or `Esc` cancels. Hold `Ctrl` to move without snapping.
 
-Settings: Sidebar (`N`) > Tool > Smart Clipping, and the add-on preferences.
+Settings: Sidebar (`N`) > Tool > Snaxis, and the add-on preferences.
 
 ### Good to know
 
 - `Shift+G` is used instead of Select Grouped (Object Mode) and Select Similar (Edit Mode); both stay in the Select menu. The add-on preferences show what the key takes over, and the key can be changed or turned off there.
 - Snap points are mesh vertices, with modifiers. In very large scenes their number is capped (Snap Point Limit, 50,000 by default): distant objects are thinned out and the panel says so.
-- Do not enable it together with the legacy add-on version of Smart Clipping from GitHub: the second one refuses to start and says which one is on.
+- Do not enable it together with the legacy add-on version from GitHub (also when it is still named Smart Clipping): the second one refuses to start and says which one is on.
 
-Documentation, source code and issue tracker: https://github.com/marc2825/Blender_SmartClip
+Documentation, source code and issue tracker: https://github.com/marc2825/Snaxis
 ```
 
-**Version notes** (if the upload form asks for them), for 2.1.0:
+**Version notes** (if the upload form asks for them), for 2.1.1:
 
 ```markdown
-First release as an extension. Same features as the legacy add-on 2.0.3; enabling the extension and the legacy add-on together is refused with a message.
+First release on the platform. Formerly called Smart Clipping, with the same features as its legacy add-on on GitHub; enabling the extension and the legacy add-on together is refused with a message.
 ```
 
 ## Media
@@ -85,7 +86,7 @@ Sources: [terms of service](https://extensions.blender.org/terms-of-service/) (l
 |---|---|---|
 | GPL v3 or later for the whole add-on (terms 1.1) | Required | Met: `LICENSE` is GPL v3, every source has `SPDX-License-Identifier: GPL-3.0-or-later`, the manifest says `SPDX:GPL-3.0-or-later` |
 | Bundled assets (images, SVG, fonts) CC0 (1.2) | Required | Met: the package holds only Python files, the manifest and `LICENSE` |
-| Copyright holders of bundled code credited in the manifest (1.3) | Required | Met: one author, `copyright = ["2026 marc2825"]`; no third-party code ([#20](https://github.com/marc2825/Blender_SmartClip/issues/20)) |
+| Copyright holders of bundled code credited in the manifest (1.3) | Required | Met: one author, `copyright = ["2026 marc2825"]`; no third-party code ([#20](https://github.com/marc2825/Snaxis/issues/20)) |
 | No "Blender" in the name (2.1); no Blender logo in icon, thumbnails, previews (2.2); no false impression of endorsement (2.3) | Required | Met. The description mentions PowerPoint only as a comparison, with no logo |
 | Description that says everything it does (3.1) | Required | Met: the listing text above, checked against the current version |
 | Fully functional, documented, maintained (3.3) | Required | Met: guide, issue tracker, CI |
@@ -99,21 +100,21 @@ Sources: [terms of service](https://extensions.blender.org/terms-of-service/) (l
 | No auto-updater; no pip installs at run time | Guideline (required) | Met |
 | `keyconfigs.addon` may be None in background mode | Guideline (required) | Met: `keymap.register_keymaps()` returns when it is None |
 | Preferences by `__package__`, not `__name__`; no literal `bl_ext` / repository names | Guideline (required) | Met: `prefs.ADDON_MODULE_NAME = __package__`; translations registered under `__package__` |
-| `sys` read-only; no module loading tricks | Guideline (required) | Met for the extension: the legacy add-on's clean-up of its own old submodules (`__init__.py`, [#23](https://github.com/marc2825/Blender_SmartClip/issues/23)) runs only as a top-level module, never in an extension |
+| `sys` read-only; no module loading tricks | Guideline (required) | Met for the extension: the legacy add-on's clean-up of its own old submodules (`__init__.py`, [#23](https://github.com/marc2825/Snaxis/issues/23)) runs only as a top-level module, never in an extension |
 | No writing into the add-on's folder; `extension_path_user` for files | Guideline (required) | Met: it writes no files |
 | `bl_info` | Guideline (the manual's conversion steps remove it) | Kept for the legacy add-on (Blender 4.0 / 4.1). Blender ignores it in an extension and only mentions it with `--debug-python` |
 | Keymap conflicts | Not covered by the rules | `Shift+G` replaces Select Grouped / Select Similar; the preferences say so under the key, the key can be changed or turned off, and the listing and README say it. No change needed for review |
 
-**Outside the rules, still open** ([#21](https://github.com/marc2825/Blender_SmartClip/issues/21), a technical screening, not a formal freedom-to-operate opinion): US11204679B1 (Adobe, US only, active) comes close in one configuration and should be checked by a professional before distributing with a US focus; whether "Smart Clipping" could be confused with the US trademark SMARTCLIP (registration 7700431) has not been checked. Neither blocks the submission under the platform's rules.
+**Outside the rules, still open** ([#21](https://github.com/marc2825/Snaxis/issues/21), a technical screening, not a formal freedom-to-operate opinion): US11204679B1 (Adobe, US only, active) comes close in one configuration and should be checked by a professional before distributing with a US focus. The rename to Snaxis (2.1.1) moves away from the US trademark SMARTCLIP (registration 7700431) that #21 noted; "Snaxis" itself has not been searched in the trademark registers (USPTO, J-PlatPat): a web search found no product of that name, only the company name Synaxis in unrelated fields. Neither blocks the submission under the platform's rules.
 
 ## Submitting (the owner)
 
-1. Push the `v2.1.0` tag (or have it pushed) so the release workflow publishes both ZIPs; it runs the UI tests on the source and on the installed extension first.
-2. Download `smart_clipping-v2.1.0-extension.zip` and its `.sha256` from the release and check the checksum (`sha256sum -c smart_clipping-v2.1.0-extension.sha256`, or `Get-FileHash` on Windows).
+1. Push the `v2.1.1` tag (or have it pushed) so the release workflow publishes both ZIPs; it runs the UI tests on the source and on the installed extension first.
+2. Download `snaxis-v2.1.1-extension.zip` and its `.sha256` from the release and check the checksum (`sha256sum -c snaxis-v2.1.1-extension.sha256`, or `Get-FileHash` on Windows).
 3. Optionally drag the ZIP into Blender 4.2 or later and try a move once.
 4. Sign in at https://extensions.blender.org/ with your Blender ID (create one at https://id.blender.org/ if needed). The account should be the one that will maintain the listing (guideline: the uploader is the owner / maintainer).
 5. Open https://extensions.blender.org/submit/ and upload the ZIP. The site reads the name, tagline, version, tags, license and website from the manifest.
-6. On the draft page, paste the [listing text](#listing-text), add the [media](#media) (icon, featured image, screenshots, optionally the video), and set the support / issue link to https://github.com/marc2825/Blender_SmartClip/issues if asked.
+6. On the draft page, paste the [listing text](#listing-text), add the [media](#media) (icon, featured image, screenshots, optionally the video), and set the support / issue link to https://github.com/marc2825/Snaxis/issues if asked.
 7. Submit for review. The extension shows as "Awaiting Review" in the [approval queue](https://extensions.blender.org/approval-queue/); moderators comment there.
 8. If they ask for changes ("Awaiting Changes"): fix them here, release a new patch version (2.1.1) the same way, and upload that ZIP as a new version of the same extension.
 9. After approval: update the README's installation steps to point to the platform (Get Extensions), then announce it.

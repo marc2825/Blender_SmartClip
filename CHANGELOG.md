@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- Renamed from Smart Clipping to **Snaxis**. It is the same add-on with the same features; the repository moved to https://github.com/marc2825/Snaxis (old links redirect).
+- The ZIPs are now `snaxis-vX.Y.Z.zip` (legacy add-on, Blender 4.0 and later) and `snaxis-vX.Y.Z-extension.zip` (extension, Blender 4.2 and later).
+- Installing the new legacy ZIP over Smart Clipping keeps your preferences and shortcut: its module is still `smart_clipping`, and the operator, scene setting and keymap names did not change, so keymaps, scripts and `.blend` files keep working.
+- The extension's id is now `snaxis` (it was `smart_clipping` in 2.1.0). Remove a 2.1.0 extension before installing this one; its preferences do not carry over.
+
 ## [2.1.0] - 2026-11-25
 
 ### Added

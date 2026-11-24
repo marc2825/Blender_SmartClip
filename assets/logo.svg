@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="220" viewBox="0 0 800 220" role="img" aria-labelledby="logo-title">
-  <title id="logo-title">Smart Clipping</title>
+  <title id="logo-title">Snaxis</title>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#14202f"/>
@@ -21,40 +21,40 @@
 
   <!-- reference cube: edges and vertices -->
   <g fill="none" stroke="#9fb6cc" stroke-width="1.8" stroke-linejoin="round">
-    <path d="M118 89.4 L148 72 L118 54.7 L88 72 Z"/>
-    <path d="M88 72 L88 106.7 L118 124 L148 106.7 L148 72"/>
-    <path d="M118 89.4 L118 124"/>
+    <path d="M178 89.4 L208 72 L178 54.7 L148 72 Z"/>
+    <path d="M148 72 L148 106.7 L178 124 L208 106.7 L208 72"/>
+    <path d="M178 89.4 L178 124"/>
   </g>
   <g fill="#dbe7f3">
-    <circle cx="118" cy="89.4" r="3.2"/>
-    <circle cx="88" cy="72" r="3.2"/>
+    <circle cx="178" cy="89.4" r="3.2"/>
     <circle cx="148" cy="72" r="3.2"/>
-    <circle cx="118" cy="54.7" r="3.2"/>
-    <circle cx="88" cy="106.7" r="3.2"/>
+    <circle cx="208" cy="72" r="3.2"/>
+    <circle cx="178" cy="54.7" r="3.2"/>
     <circle cx="148" cy="106.7" r="3.2"/>
+    <circle cx="208" cy="106.7" r="3.2"/>
   </g>
-  <circle cx="118" cy="124" r="4.5" fill="#ff3dff"/>
+  <circle cx="178" cy="124" r="4.5" fill="#ff3dff"/>
 
   <!-- moving cube (selected: Blender's orange) -->
   <g fill="none" stroke="#ffa033" stroke-width="2.2" stroke-linejoin="round">
-    <path d="M682 97.4 L705 84.2 L682 70.9 L659 84.2 Z"/>
-    <path d="M659 84.2 L659 110.7 L682 124 L705 110.7 L705 84.2"/>
-    <path d="M682 97.4 L682 124"/>
+    <path d="M622 97.4 L645 84.2 L622 70.9 L599 84.2 Z"/>
+    <path d="M599 84.2 L599 110.7 L622 124 L645 110.7 L645 84.2"/>
+    <path d="M622 97.4 L622 124"/>
   </g>
   <g fill="#ffc27a">
-    <circle cx="682" cy="97.4" r="3.2"/>
-    <circle cx="659" cy="84.2" r="3.2"/>
-    <circle cx="705" cy="84.2" r="3.2"/>
-    <circle cx="682" cy="70.9" r="3.2"/>
-    <circle cx="659" cy="110.7" r="3.2"/>
-    <circle cx="705" cy="110.7" r="3.2"/>
+    <circle cx="622" cy="97.4" r="3.2"/>
+    <circle cx="599" cy="84.2" r="3.2"/>
+    <circle cx="645" cy="84.2" r="3.2"/>
+    <circle cx="622" cy="70.9" r="3.2"/>
+    <circle cx="599" cy="110.7" r="3.2"/>
+    <circle cx="645" cy="110.7" r="3.2"/>
   </g>
 
   <!-- snap point -->
-  <circle cx="682" cy="124" r="10" fill="#00e5ff" opacity="0.55" filter="url(#glow)"/>
-  <circle cx="682" cy="124" r="5.5" fill="#00e5ff"/>
+  <circle cx="622" cy="124" r="10" fill="#00e5ff" opacity="0.55" filter="url(#glow)"/>
+  <circle cx="622" cy="124" r="5.5" fill="#00e5ff"/>
 
   <!-- wordmark, centred so it stays in the middle with any of the fonts -->
-  <text x="400" y="124" text-anchor="middle" fill="#f2f4f7" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="62" font-weight="600" letter-spacing="0.5">Smart Clipping</text>
+  <text x="400" y="124" text-anchor="middle" fill="#f2f4f7" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="80" font-weight="600" letter-spacing="1">Snaxis</text>
   <text x="400" y="168" text-anchor="middle" fill="#8fa9c4" font-family="ui-monospace, 'Cascadia Code', Consolas, Menlo, monospace" font-size="17">Smart guides and snapping for Blender</text>
 </svg>

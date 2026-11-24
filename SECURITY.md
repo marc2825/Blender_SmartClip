@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes go into the latest release on [GitHub Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest). Older versions are not updated; please update to the latest release first.
+Security fixes go into the latest release on [GitHub Releases](https://github.com/marc2825/Snaxis/releases/latest). Older versions are not updated; please update to the latest release first.
 
 | Version | Supported |
 |---|---|
@@ -13,7 +13,7 @@ Security fixes go into the latest release on [GitHub Releases](https://github.co
 
 Please do not report security problems in public issues, discussions or pull requests.
 
-Report them privately through GitHub: **Security** tab → **Report a vulnerability** ([open a private report](https://github.com/marc2825/Blender_SmartClip/security/advisories/new)). Only the maintainer sees the report.
+Report them privately through GitHub: **Security** tab → **Report a vulnerability** ([open a private report](https://github.com/marc2825/Snaxis/security/advisories/new)). Only the maintainer sees the report.
 
 A useful report includes:
 
@@ -36,6 +36,6 @@ Please keep the details private until a fix is released.
 
 ## 日本語
 
-脆弱性やセキュリティ上の問題は、公開の Issue・Discussions・プルリクエストに書かず、GitHub の **Security** タブ → **Report a vulnerability**（[非公開で報告する](https://github.com/marc2825/Blender_SmartClip/security/advisories/new)）から非公開で報告してください。報告はメンテナーだけが見られます。
+脆弱性やセキュリティ上の問題は、公開の Issue・Discussions・プルリクエストに書かず、GitHub の **Security** タブ → **Report a vulnerability**（[非公開で報告する](https://github.com/marc2825/Snaxis/security/advisories/new)）から非公開で報告してください。報告はメンテナーだけが見られます。
 
 アドオン・Blender・OS のバージョン、起こり得ること（悪意のある `.blend` ファイルなど、どんな条件で何ができるか）、再現手順か最小限のファイルを書いてください。修正版の公開までは詳細を公開しないでください。個人で運営しているため、返答の期限はお約束できません。修正は最新版にのみ行います。
