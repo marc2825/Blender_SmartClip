@@ -8,7 +8,7 @@ Usage (the user folders must point somewhere disposable):
   BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER_CONFIG=/tmp/bl/config \\
   BLENDER_USER_RESOURCES=/tmp/bl \\
     blender --background --factory-startup --python tests/install_zip_test.py -- \\
-      [--upgrade-from OLD.zip] dist/smart_clipping-vX.Y.Z.zip
+      [--upgrade-from OLD.zip] dist/snaxis-vX.Y.Z.zip
 
 With --upgrade-from, OLD.zip is installed and enabled first, then the new ZIP
 is installed over it and the add-on is disabled and enabled again in the
@@ -34,7 +34,7 @@ def main():
         old_zip, argv = os.path.abspath(argv[1]), argv[2:]
     if len(argv) != 1:
         print("usage: ... --python tests/install_zip_test.py -- "
-              "[--upgrade-from OLD.zip] PATH/TO/smart_clipping-vX.Y.Z.zip")
+              "[--upgrade-from OLD.zip] PATH/TO/snaxis-vX.Y.Z.zip")
         return 2
     zip_path = os.path.abspath(argv[0])
     if not (os.environ.get("BLENDER_USER_SCRIPTS") or os.environ.get("BLENDER_USER_RESOURCES")):

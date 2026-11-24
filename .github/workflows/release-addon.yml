@@ -98,7 +98,7 @@ jobs:
           BLENDER_USER_SCRIPTS="${user}/scripts" \
           BLENDER_USER_CONFIG="${user}/config" \
             "blender-${BLENDER_VERSION}-linux-x64/blender" --background --factory-startup \
-              --python-exit-code 1 --python tests/install_zip_test.py -- "dist/smart_clipping-v${VERSION}.zip"
+              --python-exit-code 1 --python tests/install_zip_test.py -- "dist/snaxis-v${VERSION}.zip"
 
       - name: Validate and Install the Extension ZIP
         shell: bash
@@ -107,7 +107,7 @@ jobs:
           bash .github/scripts/fetch-blender.sh "${EXTENSION_BLENDER_VERSION}"
           tar -xf "blender-${EXTENSION_BLENDER_VERSION}-linux-x64.tar.xz"
           blender="blender-${EXTENSION_BLENDER_VERSION}-linux-x64/blender"
-          ext="dist/smart_clipping-v${VERSION}-extension.zip"
+          ext="dist/snaxis-v${VERSION}-extension.zip"
           "${blender}" --command extension validate "${ext}"
           user="${RUNNER_TEMP}/blender-user-extension"
           BLENDER_USER_RESOURCES="${user}" \
@@ -116,7 +116,7 @@ jobs:
           BLENDER_USER_EXTENSIONS="${user}/extensions" \
             "${blender}" --background --factory-startup --python-exit-code 1 \
               --python tests/extension_install_test.py -- \
-                --phase install "${ext}" "dist/smart_clipping-v${VERSION}.zip"
+                --phase install "${ext}" "dist/snaxis-v${VERSION}.zip"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v7
@@ -133,10 +133,10 @@ jobs:
         # Third-party action with write access: pinned to a commit (v3.0.4).
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
-          name: Smart Clipping ${{ github.ref_name }}
+          name: Snaxis ${{ github.ref_name }}
           body_path: dist/RELEASE_NOTES.md
           files: |
-            dist/smart_clipping-${{ github.ref_name }}.zip
-            dist/smart_clipping-${{ github.ref_name }}.sha256
-            dist/smart_clipping-${{ github.ref_name }}-extension.zip
-            dist/smart_clipping-${{ github.ref_name }}-extension.sha256
+            dist/snaxis-${{ github.ref_name }}.zip
+            dist/snaxis-${{ github.ref_name }}.sha256
+            dist/snaxis-${{ github.ref_name }}-extension.zip
+            dist/snaxis-${{ github.ref_name }}-extension.sha256

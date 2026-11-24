@@ -1,13 +1,13 @@
 schema_version = "1.0.0"
 
-id = "smart_clipping"
+id = "snaxis"
 version = "2.1.0"
-name = "Smart Clipping"
+name = "Snaxis"
 tagline = "Smart guides that snap moves to nearby vertices"
 maintainer = "marc2825"
 type = "add-on"
 
-website = "https://github.com/marc2825/Blender_SmartClip"
+website = "https://github.com/marc2825/Snaxis"
 
 tags = ["3D View", "Modeling", "Mesh"]
 

@@ -92,7 +92,8 @@ def check_manifest():
     text = (ROOT / "smart_clipping" / "blender_manifest.toml").read_text(encoding="utf-8")
     data = tomllib.loads(text)
     check("manifest_version_is_bl_info", read_manifest_version(ROOT) == read_bl_info_version(ROOT))
-    check("manifest_id_is_folder", data.get("id") == "smart_clipping", str(data.get("id")))
+    check("manifest_id", data.get("id") == "snaxis", str(data.get("id")))
+    check("manifest_name", data.get("name") == "Snaxis", str(data.get("name")))
     check("manifest_license", data.get("license") == ["SPDX:GPL-3.0-or-later"],
           str(data.get("license")))
     tagline = data.get("tagline", "")
@@ -143,7 +144,7 @@ def check_build(fmt, out, tracked):
     check(f"{fmt}_reproducible", first.read_bytes() == second.read_bytes())
     version = read_bl_info_version(ROOT)
     suffix = "-extension" if fmt == EXTENSION else ""
-    check(f"{fmt}_named_after_version", first.name == f"smart_clipping-v{version}{suffix}.zip",
+    check(f"{fmt}_named_after_version", first.name == f"snaxis-v{version}{suffix}.zip",
           first.name)
     digest = hashlib.sha256(first.read_bytes()).hexdigest()
     checksum = first.with_suffix(".sha256").read_bytes()     # as written: LF, for sha256sum -c

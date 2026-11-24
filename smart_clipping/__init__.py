@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 bl_info = {
-    "name": "Smart Clipping",
+    "name": "Snaxis",
     "author": "marc2825",
     "version": (2, 1, 0),
     "blender": (4, 0, 0),
-    "location": "View3D > Sidebar > Tool > Smart Clipping",
+    "location": "View3D > Sidebar > Tool > Snaxis",
     "description": "Move with guide lines that snap to nearby vertices, line up coordinates "
-                   "and follow axis constraints",
-    "doc_url": "https://github.com/marc2825/Blender_SmartClip",
-    "tracker_url": "https://github.com/marc2825/Blender_SmartClip/issues",
+                   "and follow axis constraints (formerly Smart Clipping)",
+    "doc_url": "https://github.com/marc2825/Snaxis",
+    "tracker_url": "https://github.com/marc2825/Snaxis/issues",
     "category": "3D View",
 }
 
@@ -53,7 +53,7 @@ class _SidebarPanel:
 
 
 class SMARTCLIP_PT_panel(_SidebarPanel, bpy.types.Panel):
-    bl_label = "Smart Clipping"
+    bl_label = "Snaxis"
     bl_idname = "SMARTCLIP_PT_panel"
 
     def draw_header(self, context):
@@ -264,7 +264,7 @@ def register():
     owner = other_copy()
     if owner is not None:
         raise AlreadyEnabledError(
-            f"Smart Clipping is already enabled as \"{owner}\". Only one copy can be on: "
+            f"Snaxis is already enabled as \"{owner}\". Only one copy can be on: "
             f"turn that one off in Preferences > Add-ons (or Get Extensions) first, "
             f"then enable this one")
 
@@ -273,8 +273,8 @@ def register():
         bpy.utils.register_class(cls)
 
     bpy.types.Scene.smartclip_enabled = BoolProperty(
-        name="Enable Smart Clipping",
-        description=("Use Smart Clipping in this scene. When off, its shortcut (Shift+G "
+        name="Enable Snaxis",
+        description=("Use Snaxis in this scene. When off, its shortcut (Shift+G "
                      "unless changed) does what Blender assigns to the key"),
         default=True,
     )

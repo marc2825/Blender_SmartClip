@@ -37,7 +37,7 @@ MESSAGES = {
     "Move the selection with guide lines that snap to nearby vertices":
         "近くの頂点にスナップするガイド線を使って、選択したものを移動します",
     "Distance moved, in world space": "移動した距離（ワールド座標）",
-    "Smart Clipping is turned off for this scene": "このシーンでは Smart Clipping がオフになっています",
+    "Snaxis is turned off for this scene": "このシーンでは Snaxis がオフになっています",
     "Needs an active object": "アクティブオブジェクトが必要です",
     "Works in Object Mode and mesh Edit Mode": "オブジェクトモードとメッシュの編集モードで使えます",
     "Nothing selected to move": "動かすものが選択されていません",
@@ -55,10 +55,10 @@ MESSAGES = {
 
     # Sidebar panel and scene settings
     "Limits and Display": "上限と表示",
-    "Enable Smart Clipping": "Smart Clipping を使う",
-    "Use Smart Clipping in this scene. When off, its shortcut (Shift+G unless changed) "
+    "Enable Snaxis": "Snaxis を使う",
+    "Use Snaxis in this scene. When off, its shortcut (Shift+G unless changed) "
     "does what Blender assigns to the key":
-        "このシーンで Smart Clipping を使います。オフのときは、ショートカットのキー"
+        "このシーンで Snaxis を使います。オフのときは、ショートカットのキー"
         "（初期設定は Shift+G）が Blender 本来の機能として働きます",
     "Which meshes the move snaps to. Press S while moving to switch":
         "移動中にスナップする先のメッシュです。移動中は S キーで切り替えられます",
@@ -132,9 +132,9 @@ MESSAGES = {
     "Color of the guide line and target marker while snapped":
         "スナップしている間のガイド線と目標マーカーの色です",
     "Snap To and Align Only are set per scene in the 3D Viewport: Sidebar (N) > Tool > "
-    "Smart Clipping":
+    "Snaxis":
         "スナップ先と座標合わせは、シーンごとに 3D ビューポートのサイドバー（N）> "
-        "ツール > Smart Clipping で設定します",
+        "ツール > Snaxis で設定します",
 
     # Status bar during a move
     "Move Freely": "スナップしない",

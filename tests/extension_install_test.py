@@ -13,9 +13,9 @@ the preferences the first one saved):
   BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts \\
   BLENDER_USER_CONFIG=/tmp/bl/config BLENDER_USER_EXTENSIONS=/tmp/bl/extensions \\
     blender --background --factory-startup --python tests/extension_install_test.py -- \\
-      --phase install dist/smart_clipping-vX.Y.Z-extension.zip dist/smart_clipping-vX.Y.Z.zip
+      --phase install dist/snaxis-vX.Y.Z-extension.zip dist/snaxis-vX.Y.Z.zip
   (same variables) blender --background --python tests/extension_install_test.py -- \\
-      --phase reload dist/smart_clipping-vX.Y.Z-extension.zip dist/smart_clipping-vX.Y.Z.zip
+      --phase reload dist/snaxis-vX.Y.Z-extension.zip dist/snaxis-vX.Y.Z.zip
 
 install: installs the extension into the "User Default" repository with
   Install from Disk's operator, checks that it registers under its bl_ext
@@ -38,9 +38,11 @@ import traceback
 
 import bpy
 
-LEGACY = "smart_clipping"
+LEGACY = "smart_clipping"            # the legacy add-on's module (its name as Smart Clipping)
+PKG_ID = "snaxis"                    # the extension's id
 REPO = "user_default"
-EXTENSION = f"bl_ext.{REPO}.smart_clipping"
+EXTENSION = f"bl_ext.{REPO}.{PKG_ID}"
+COPIES = (LEGACY, PKG_ID)            # last part of a copy's module name
 MOVE = "view3d.smartclip_move"
 SCENE_PROPS = ("smartclip_enabled", "smartclip_target_scope", "smartclip_target_collection",
                "smartclip_align_x", "smartclip_align_y", "smartclip_align_z")
@@ -75,7 +77,7 @@ def owner():
 
 def enabled_copies():
     return sorted(a.module for a in bpy.context.preferences.addons
-                  if a.module.rsplit(".", 1)[-1] == "smart_clipping")
+                  if a.module.rsplit(".", 1)[-1] in COPIES)
 
 
 def addon_items():
@@ -188,7 +190,7 @@ def install_extension(zip_path):
 
 
 def uninstall_extension():
-    return bpy.ops.extensions.package_uninstall(repo_index=repo_index(), pkg_id="smart_clipping")
+    return bpy.ops.extensions.package_uninstall(repo_index=repo_index(), pkg_id=PKG_ID)
 
 
 def install_legacy(zip_path):
@@ -243,14 +245,14 @@ def phase_install(ext_zip, legacy_zip):
           all(name.startswith(EXTENSION) for name in sys.modules
               if name.rsplit(".", 1)[-1] in ("ops", "detector", "drawing", "hud", "i18n",
                                               "keymap", "prefs", "utils")
-              and "smart_clipping" in name),
-          str(sorted(n for n in sys.modules if "smart_clipping" in n)))
+              and (LEGACY in name or PKG_ID in name)),
+          str(sorted(n for n in sys.modules if LEGACY in n or PKG_ID in n)))
     check_registered_by("extension", EXTENSION)
     prefs = prefs_of(EXTENSION)
     check("extension_preferences", prefs is not None and prefs.max_vertex_budget > 0)
     check("preferences_module_name", module.prefs.ADDON_MODULE_NAME == EXTENSION,
           str(module.prefs.ADDON_MODULE_NAME))
-    match = re.search(r"-v(\d+\.\d+\.\d+)-extension\.zip$", ext_zip)
+    match = re.search(r"^snaxis-v(\d+\.\d+\.\d+)-extension\.zip$", os.path.basename(ext_zip))
     with open(os.path.join(installed_at, "blender_manifest.toml"), encoding="utf-8") as f:
         manifest_version = re.search(r'^version = "([^"]+)"', f.read(), re.M)
     check("version_matches_zip", match is not None and manifest_version is not None
@@ -339,7 +341,7 @@ def phase_reload(ext_zip, legacy_zip):
     check("legacy_untouched_by_refused_extension", registered_state() == before,
           f"{registered_state()} != {before}")
     uninstall_extension()
-    ext_dir = os.path.join(bpy.utils.user_resource("EXTENSIONS"), REPO, "smart_clipping")
+    ext_dir = os.path.join(bpy.utils.user_resource("EXTENSIONS"), REPO, PKG_ID)
     check("extension_uninstalled", not os.path.exists(ext_dir), ext_dir)
     check("legacy_untouched_by_uninstalling_extension", registered_state() == before)
 

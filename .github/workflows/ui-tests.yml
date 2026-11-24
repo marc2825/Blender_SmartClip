@@ -54,7 +54,7 @@ jobs:
         backend: ${{ fromJSON(inputs.backends || '["GRID"]') }}
     env:
       BLENDER_VERSION: ${{ matrix.blender }}
-      INSTALLED: ${{ inputs.installed && 'bl_ext.user_default.smart_clipping' || '' }}
+      INSTALLED: ${{ inputs.installed && 'bl_ext.user_default.snaxis' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -94,8 +94,8 @@ jobs:
                  BLENDER_USER_CONFIG="${user}/config" BLENDER_USER_EXTENSIONS="${user}/extensions"
           env | grep '^BLENDER_USER_' >> "${GITHUB_ENV}"
           blender="blender-${BLENDER_VERSION}-linux-x64/blender"
-          ext="${RUNNER_TEMP}/dist/smart_clipping-v${version}-extension.zip"
-          legacy="${RUNNER_TEMP}/dist/smart_clipping-v${version}.zip"
+          ext="${RUNNER_TEMP}/dist/snaxis-v${version}-extension.zip"
+          legacy="${RUNNER_TEMP}/dist/snaxis-v${version}.zip"
           "${blender}" --background --factory-startup --python-exit-code 1 \
             --python tests/extension_install_test.py -- --phase install "${ext}" "${legacy}"
           "${blender}" --background --python-exit-code 1 \

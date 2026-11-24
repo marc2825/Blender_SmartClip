@@ -135,7 +135,7 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
     def draw(self, context):
         layout = self.layout
         layout.label(text="Snap To and Align Only are set per scene in the 3D Viewport: "
-                          "Sidebar (N) > Tool > Smart Clipping", icon="INFO")
+                          "Sidebar (N) > Tool > Snaxis", icon="INFO")
         layout.use_property_split = True
         layout.use_property_decorate = False
 

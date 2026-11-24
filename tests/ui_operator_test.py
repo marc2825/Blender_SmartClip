@@ -18,7 +18,7 @@ SMARTCLIP_UI_LANGUAGE=ja_JP to run them with the interface in Japanese,
 SMARTCLIP_UI_SCALE=2 to run them at a larger interface scale (as on HiDPI
 displays), SMARTCLIP_UI_THEME=light to use Blender's light theme, and
 SMARTCLIP_UI_MODULE=NAME to test the add-on already enabled under that module
-name (the installed extension, bl_ext.user_default.smart_clipping) instead of
+name (the installed extension, bl_ext.user_default.snaxis) instead of
 the source folder.
 
 Exit code 0 = all checks passed, 1 = failures.
@@ -63,9 +63,9 @@ _TEE = None
 
 
 class SMARTCLIP_TEST_OT_probe(bpy.types.Operator):
-    """Records that a key press reached the keymap item after Smart Clipping's."""
+    """Records that a key press reached the keymap item after Snaxis's."""
     bl_idname = "smartclip_test.probe"
-    bl_label = "Smart Clipping Test Probe"
+    bl_label = "Snaxis Test Probe"
     calls = 0
 
     def invoke(self, _context, _event):
@@ -241,7 +241,7 @@ def _steps():
     _parent, child, target = _setup_scene()
     bpy.context.view_layer.update()
     with bpy.context.temp_override(window=win, area=area):
-        bpy.ops.ed.undo_push(message="Smart Clipping UI test scene")
+        bpy.ops.ed.undo_push(message="Snaxis UI test scene")
     rv3d.view_perspective = "PERSP"
     rv3d.view_location = (0.5, 0.0, 0.0)
     rv3d.view_distance = 12.0
@@ -508,7 +508,7 @@ def _steps():
     # Same Mesh in Object Mode has no snap points, so nothing can snap.
     # (The positions were put back by script above: make that the undo state.)
     with bpy.context.temp_override(window=win, area=area):
-        bpy.ops.ed.undo_push(message="Smart Clipping UI test: before A only")
+        bpy.ops.ed.undo_push(message="Snaxis UI test: before A only")
     yield STEP
     yield from start_modal("confirm_settings_only")
     ev("A", "PRESS")
@@ -719,7 +719,7 @@ def _steps():
     child.lock_location[2] = True
     bpy.context.view_layer.update()
     with bpy.context.temp_override(window=win, area=area):
-        bpy.ops.ed.undo_push(message="Smart Clipping UI test: Location Lock")
+        bpy.ops.ed.undo_push(message="Snaxis UI test: Location Lock")
     yield STEP
     with _MoveSpy() as spy:
         yield from start_modal("projected_lock")
@@ -970,7 +970,7 @@ def main():
             smart_clipping.detector.get_addon_prefs = lambda _ctx: prefs
     bpy.utils.register_class(SMARTCLIP_TEST_OT_probe)
     # Added in the same tick as the add-on's items so both are merged into the
-    # user keymap together; head=True places it right after Smart Clipping's.
+    # user keymap together; head=True places it right after Snaxis's.
     km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(
         name="Object Mode", space_type="EMPTY", region_type="WINDOW")
     km.keymap_items.new("smartclip_test.probe", type="G", value="PRESS", shift=True, head=True)

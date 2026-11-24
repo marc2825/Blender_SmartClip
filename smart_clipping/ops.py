@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 marc2825
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Modal operator that drives the Smart Clipping move workflow.
+"""Modal operator that drives the Snaxis move workflow.
 
 Lifecycle
 ---------
@@ -528,7 +528,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
     def poll(cls, context):
         scene = context.scene
         if not getattr(scene, "smartclip_enabled", False):
-            return _poll_fail(cls, "Smart Clipping is turned off for this scene")
+            return _poll_fail(cls, "Snaxis is turned off for this scene")
         obj = context.active_object
         if obj is None:
             return _poll_fail(cls, "Needs an active object")

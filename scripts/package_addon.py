@@ -4,11 +4,12 @@
 """
 Package the add-on in both formats, from the same sources:
 
-  legacy     ``smart_clipping-vX.Y.Z.zip``: ``smart_clipping/`` at the zip root,
+  legacy     ``snaxis-vX.Y.Z.zip``: ``smart_clipping/`` at the zip root (the
+             legacy add-on keeps the module name it had as Smart Clipping),
              for Preferences > Add-ons > Install from Disk on Blender 4.0+
              (it has no manifest, so Blender 4.2+ installs it as a legacy
              add-on too)
-  extension  ``smart_clipping-vX.Y.Z-extension.zip``: the files at the zip
+  extension  ``snaxis-vX.Y.Z-extension.zip`` (extension id ``snaxis``): the files at the zip
              root with ``blender_manifest.toml``, as
              ``blender --command extension build`` lays them out, for
              Blender 4.2+ and extensions.blender.org
@@ -42,6 +43,10 @@ from pathlib import Path, PurePosixPath
 
 from versioning import ADDON_DIR, MANIFEST, read_bl_info_version, read_manifest_version
 
+# The ZIPs are named after the product; the legacy add-on's module (the
+# folder in its ZIP) stays ADDON_DIR so that installing over an older version
+# keeps the user's preferences.
+PRODUCT = "snaxis"
 LEGACY = "legacy"
 EXTENSION = "extension"
 FORMATS = (LEGACY, EXTENSION)
@@ -132,7 +137,7 @@ def sha256_file(path: Path) -> str:
 
 def zip_filename(version: str, fmt: str = LEGACY) -> str:
     suffix = "-extension" if fmt == EXTENSION else ""
-    return f"{ADDON_DIR}-v{version}{suffix}.zip"
+    return f"{PRODUCT}-v{version}{suffix}.zip"
 
 
 def build(root: Path, output_dir: Path, expected_version: "str | None" = None,

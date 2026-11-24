@@ -6,7 +6,7 @@
 The items are added at the head of their keymaps, so they take precedence
 over the built-in Shift+G (Select Grouped / Select Similar).  Whether they are
 active is the user's choice (Use Shortcut in the add-on preferences) and does
-not follow the per-scene "Enable Smart Clipping" setting: the keymap is shared
+not follow the per-scene "Enable Snaxis" setting: the keymap is shared
 by all scenes, so the operator's poll() checks the scene instead.  When it
 fails, the key press falls through to Blender's own Shift+G.
 
@@ -109,7 +109,7 @@ def overridden_name(km, kmi) -> "str | None":
     """Name of the active item in *km* (a user keymap) that *kmi* takes over.
 
     The first other active item with the same key and modifiers, which the
-    key would run without Smart Clipping (Select Grouped / Select Similar
+    key would run without Snaxis (Select Grouped / Select Similar
     for Shift+G); None when there is none or *kmi* is off.
     """
     try:

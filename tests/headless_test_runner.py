@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Smart Clipping headless test runner for Blender.
+Snaxis headless test runner for Blender.
 
 Usage:
   blender --background --factory-startup --python tests/headless_test_runner.py
@@ -10,7 +10,7 @@ Usage:
 
 With --module NAME the cases run against the add-on already enabled under
 that name instead of the source folder, e.g. the installed extension
-(``bl_ext.user_default.smart_clipping``, see tests/extension_install_test.py).
+(``bl_ext.user_default.snaxis``, see tests/extension_install_test.py).
 """
 
 import argparse
@@ -843,7 +843,7 @@ def case_keymap_independent_of_scene_enable():
     bpy.ops.smartclip.add_default_hotkeys()
     try:
         scene.smartclip_enabled = False
-        # Disabling Smart Clipping in one scene must not switch the shared
+        # Disabling Snaxis in one scene must not switch the shared
         # keymap off (another scene may have it enabled); poll() blocks the
         # operator instead so Shift+G falls through to Blender's own item.
         assert all(kmi.active for kmi in kmis)
@@ -1822,7 +1822,7 @@ def case_translations():
 
         # Every name and tooltip the add-on registers comes out in Japanese,
         # from these messages or from Blender's catalog.
-        keep = {"Smart Clipping", "X", "Y", "Z"}
+        keep = {"Snaxis", "X", "Y", "Z"}
         missing = []
 
         def want(text, ctx="*"):

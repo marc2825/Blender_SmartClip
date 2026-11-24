@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Create a manual validation scene for Smart Clipping UI/operator tests.
+Create a manual validation scene for Snaxis UI/operator tests.
 
 Usage:
   blender --python tests/manual_ui_setup.py
@@ -118,7 +118,7 @@ def main():
     active.select_set(True)
     bpy.context.view_layer.objects.active = active
 
-    print("\n=== Smart Clipping Manual Validation Scene ===")
+    print("\n=== Snaxis Manual Validation Scene ===")
     print("  SC_Active (origin) | SC_Near_X/Y/Z | SC_Diag | SC_COL_A/B | SC_Heavy_100k")
     print("  Scope=VISIBLE, budget=50000, snap_px=30  |  See docs/DEVELOPMENT.md")
     print("")

@@ -5,7 +5,7 @@
 Record the frames of the README demo (assets/teaser.gif) from the current UI.
 
 The 3D View is split into a perspective view (top) and a front orthographic
-view (bottom), both with the Smart Clipping panel in the sidebar.  In Edit
+view (bottom), both with the Snaxis panel in the sidebar.  In Edit
 Mode one vertex of a cube is moved with simulated input: it snaps onto a
 vertex of another box, then Align Only X (A) and the X constraint (X) are
 turned on and it slides along X, lining its X coordinate up with the boxes

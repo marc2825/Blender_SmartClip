@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a reproducible defect in Smart Clipping
+description: Report a reproducible defect in Snaxis (formerly Smart Clipping)
 title: "[Bug]: "
 labels:
   - bug
@@ -96,7 +96,7 @@ body:
     id: logs
     attributes:
       label: Console logs
-      description: Paste relevant Smart Clipping logs from Blender console.
+      description: Paste relevant Snaxis logs from Blender console.
       render: shell
     validations:
       required: false
