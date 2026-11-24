@@ -215,17 +215,18 @@ The workflows get Blender through `.github/scripts/fetch-blender.sh`: the archiv
 
 What was checked for the latest release, and what was not. Update it with each release.
 
-**2.1.0** (2026-11-25)
+**2.1.1** (2026-11-25), the rename to Snaxis
 
 | Where | Blender | What | Result |
 |---|---|---|---|
-| Windows 11, real display (Intel Core i7-12700F, 16 GB) | 5.3.0 | Extension ZIP: Blender's validate and build; install and restart phases (`tests/extension_install_test.py`); headless tests and UI test against the installed extension (the grid; the KD-tree with the Japanese interface) | Valid; 25 / 25 and 36 / 36; 57 / 57; 91 / 91 each |
+| Windows 11, real display (Intel Core i7-12700F, 16 GB) | 5.3.0 | Extension ZIP (`snaxis`): Blender's validate; install and restart phases; headless tests and UI test (Japanese) against the installed extension | Valid; 25 / 25 and 36 / 36; 57 / 57; 91 / 91 |
 | Same | 5.3.0 | Headless tests and UI test from the source folder | 57 / 57, 91 / 91 |
-| Same | 4.0.2, 5.3.0 | Legacy ZIP install test over 2.0.3 without a restart | 19 / 19 each |
+| Same | 4.0.2, 5.3.0 | Legacy ZIP over the published 2.1.0 (Smart Clipping): install test without a restart, and settings across a restart (`tests/upgrade_settings_test.py`) | 19 / 19; 4 / 4 and 6 / 6 each |
+| Same | 5.3.0 | The 2.1.0 extension (id `smart_clipping`) next to the `snaxis` one: the second refused, the first intact, then removed and the new one enabled | All as expected |
 | GitHub Actions, Linux | 4.2.23, 5.2.4, 5.3.0 | Extension: validate and build, install and restart phases, headless tests against the installed extension | All pass, nothing skipped |
 | GitHub Actions, Linux, Xvfb | 4.2.23, 5.2.4, 5.3.0 | UI test against the installed extension, with the grid and the KD-tree | 91 / 91 each, nothing skipped |
-| GitHub Actions, Linux | 4.0.2, 4.2.23, 5.2.4 | Headless tests from the source folder, ZIP contents (48 checks), legacy ZIP install tests (fresh, over 1.3.2) | All pass, nothing skipped |
-| GitHub Actions, Linux, Xvfb | 4.0.2, 5.2.4 | UI test from the source folder, the grid and the KD-tree (release gate, dry run) | 91 / 91 each, nothing skipped |
+| GitHub Actions, Linux | 4.0.2, 4.2.23, 5.2.4 | Headless tests from the source folder, ZIP contents (49 checks), legacy ZIP install tests (fresh, over 1.3.2, over 2.1.0 keeping the settings) | All pass, nothing skipped |
+| GitHub Actions, Linux, Xvfb | 4.0.2, 5.2.4 | UI test from the source folder, the grid and the KD-tree (release gate) | See the release run |
 
 The UI test checks behavior and that the panels draw without errors; on the virtual display the screenshots come out black, so what the overlay looks like was checked on the real display only (screenshots in `assets/listing/`, Blender 5.3.0).
 
