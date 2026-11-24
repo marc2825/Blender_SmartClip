@@ -9,6 +9,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Changed
 
 - The license is now GPL-3.0-or-later instead of MIT, as Blender asks of add-ons. Releases up to 2.0.2 stay under MIT. (#20)
+- The English README is now `README.md`, shown first on GitHub; the Japanese one moved to `README.ja.md`.
 
 ## [2.0.2] - 2026-11-24
 

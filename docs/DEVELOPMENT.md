@@ -1,6 +1,6 @@
 # Development
 
-This guide is for working on the add-on itself. For installing and using it, see the [README](../README.en.md).
+This guide is for working on the add-on itself. For installing and using it, see the [README](../README.md).
 
 ## Layout
 
@@ -212,7 +212,7 @@ The release ZIP holds no images or fonts. `assets/` (logo, demo) is part of the 
 
 - the newest released entry in `CHANGELOG.md`
 - `version` and `date-released` in `CITATION.cff`
-- the version badge in `README.md` and `README.en.md`
+- the version badge in `README.md` and `README.ja.md`
 
 The badges are static (`img.shields.io/badge/...`): the ones that ask the GitHub API are often too slow for GitHub's image proxy and show up broken.
 

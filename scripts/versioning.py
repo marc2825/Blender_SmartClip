@@ -16,7 +16,7 @@ Print the CHANGELOG section of a version (used as GitHub release notes):
 Checks:
   - CHANGELOG.md: newest released entry is ``## [X.Y.Z] - YYYY-MM-DD``
   - CITATION.cff: ``version`` and ``date-released`` match that entry
-  - README.md / README.en.md: the static version badge shows the version
+  - README.md / README.ja.md: the static version badge shows the version
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ADDON_DIR = "smart_clipping"
 
 _README_BADGE = re.compile(r"img\.shields\.io/badge/version-(?P<version>[0-9.]+)-")
-_READMES = ("README.md", "README.en.md")
+_READMES = ("README.md", "README.ja.md")
 _CHANGELOG_ENTRY = re.compile(r"^## \[(?P<version>[^\]]+)\](?: - (?P<date>\d{4}-\d{2}-\d{2}))?", re.M)
 
 

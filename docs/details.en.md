@@ -1,6 +1,6 @@
 # Guide
 
-This page expands on [Usage](../README.en.md#usage) in the README.
+This page expands on [Installation and usage](../README.md#installation-and-usage) and [Keys during a move](../README.md#keys-during-a-move) in the README.
 
 ## Controls
 
