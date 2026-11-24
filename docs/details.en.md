@@ -168,6 +168,10 @@ In measurements the Screen-space Grid was faster in almost every case: with 100,
 
 Errors are shown in the system console (on Windows, Window > Toggle System Console).
 
+### Enabling fails after an update
+
+Installing 2.0.0 over 1.x and switching the add-on off and on without restarting Blender can raise an `ImportError`. Install 2.0.1 or later, or restart Blender.
+
 ### Shift+G does not start a move
 
 - Hover over **Move with Guides** in the panel: when it cannot run, the tooltip says why.

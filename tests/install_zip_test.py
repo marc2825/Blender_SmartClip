@@ -4,9 +4,14 @@ Install a release ZIP the way a user would and check that the add-on works.
 Usage (the user folders must point somewhere disposable):
   BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER_CONFIG=/tmp/bl/config \\
   BLENDER_USER_RESOURCES=/tmp/bl \\
-    blender --background --factory-startup --python tests/install_zip_test.py -- dist/smart_clipping-vX.Y.Z.zip
+    blender --background --factory-startup --python tests/install_zip_test.py -- \\
+      [--upgrade-from OLD.zip] dist/smart_clipping-vX.Y.Z.zip
 
-Exit code 0 = installed, enabled, registered, and disabled cleanly.
+With --upgrade-from, OLD.zip is installed and enabled first, then the new ZIP
+is installed over it and the add-on is disabled and enabled again in the
+same session (no restart), as a user updating from the Preferences would.
+
+Exit code 0 = installed, enabled, registered, disabled and removed cleanly.
 """
 
 import os
@@ -21,8 +26,12 @@ MODULE = "smart_clipping"
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    old_zip = None
+    if len(argv) == 3 and argv[0] == "--upgrade-from":
+        old_zip, argv = os.path.abspath(argv[1]), argv[2:]
     if len(argv) != 1:
-        print("usage: ... --python tests/install_zip_test.py -- PATH/TO/smart_clipping-vX.Y.Z.zip")
+        print("usage: ... --python tests/install_zip_test.py -- "
+              "[--upgrade-from OLD.zip] PATH/TO/smart_clipping-vX.Y.Z.zip")
         return 2
     zip_path = os.path.abspath(argv[0])
     if not (os.environ.get("BLENDER_USER_SCRIPTS") or os.environ.get("BLENDER_USER_RESOURCES")):
@@ -39,8 +48,29 @@ def main():
         if not cond:
             failures.append(name)
 
-    bpy.ops.preferences.addon_install(filepath=zip_path)
-    bpy.ops.preferences.addon_enable(module=MODULE)
+    if old_zip:
+        bpy.ops.preferences.addon_install(filepath=old_zip)
+        bpy.ops.preferences.addon_enable(module=MODULE)
+        old = sys.modules.get(MODULE)
+        check("old_version_enabled", old is not None,
+              ".".join(str(v) for v in old.bl_info["version"]) if old else "")
+        old_modules = {name: id(mod) for name, mod in sys.modules.items()
+                       if name.startswith(MODULE + ".")}
+        # Install over it and switch the add-on off and on without restarting
+        bpy.ops.preferences.addon_install(filepath=zip_path, overwrite=True)
+        bpy.ops.preferences.addon_disable(module=MODULE)
+        try:
+            bpy.ops.preferences.addon_enable(module=MODULE)
+        except Exception as exc:       # the failure reported in issue #23
+            check("upgrade_reenable", False, f"{type(exc).__name__}: {exc}")
+        else:
+            check("upgrade_reenable", bpy.context.preferences.addons.get(MODULE) is not None)
+        stale = [name for name, ident in old_modules.items()
+                 if name in sys.modules and id(sys.modules[name]) == ident]
+        check("upgrade_reloads_every_module", not stale, ", ".join(stale))
+    else:
+        bpy.ops.preferences.addon_install(filepath=zip_path)
+        bpy.ops.preferences.addon_enable(module=MODULE)
     addon = bpy.context.preferences.addons.get(MODULE)
     module = sys.modules.get(MODULE)
     check("enabled", addon is not None and module is not None)
@@ -107,6 +137,15 @@ def main():
 
     bpy.ops.preferences.addon_disable(module=MODULE)
     check("disabled_cleanly", not hasattr(bpy.types.Scene, "smartclip_target_scope"))
+
+    try:
+        bpy.ops.preferences.addon_remove(module=MODULE)
+    except RuntimeError as exc:
+        # Blender's operator redraws the Preferences area after deleting the
+        # files; there is no area in background mode.
+        if "tag_redraw" not in str(exc):
+            raise
+    check("removed", not os.path.exists(installed_at), installed_at)
 
     print(f"[install:test] summary: passed={len(checked) - len(failures)} failed={len(failures)}")
     return 1 if failures else 0

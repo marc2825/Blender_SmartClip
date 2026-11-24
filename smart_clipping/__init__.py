@@ -11,6 +11,16 @@ bl_info = {
     "category": "3D View",
 }
 
+import sys as _sys
+
+# After Install from Disk over an older version, switching the add-on off and
+# on again re-runs only this file.  The submodules of the old version are
+# still loaded, both in sys.modules and as attributes of this package (which
+# `from . import x` would reuse), so drop them and import the new files.
+for _name in [n for n in _sys.modules if n.startswith(__name__ + ".")]:
+    del _sys.modules[_name]
+    globals().pop(_name[len(__name__) + 1:], None)
+
 import bpy
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, PointerProperty
