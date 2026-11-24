@@ -271,7 +271,9 @@ def _draw_label(x, y, runs, colors, scale):
 
 def _overlap_insets(area, region):
     """Pixels of *region* covered by overlapping regions at its left, bottom and
-    right: the toolbar and the sidebar with Region Overlap on."""
+    right: the toolbar and the sidebar with Region Overlap on, and the Adjust
+    Last Operation panel in the bottom-left corner (left over from the last
+    move while the next one runs)."""
     left = bottom = right = 0.0
     if area is None or region is None:
         return left, bottom, right
@@ -282,7 +284,9 @@ def _overlap_insets(area, region):
         overlaps_y = other.y < region.y + region.height and other.y + other.height > region.y
         if not (overlaps_x and overlaps_y):
             continue
-        if other.x <= region.x + 1 and other.height > region.height * 0.5:
+        if other.type == "HUD":
+            bottom = max(bottom, other.y + other.height - region.y)
+        elif other.x <= region.x + 1 and other.height > region.height * 0.5:
             left = max(left, other.x + other.width - region.x)
         elif (other.x + other.width >= region.x + region.width - 1
               and other.height > region.height * 0.5):

@@ -1641,6 +1641,29 @@ def case_pivot_objects():
     assert ops.pivot_objects(bpy.context, []) == []
 
 
+def case_overlay_insets():
+    # Labels keep clear of the toolbar, the sidebar and the Adjust Last
+    # Operation panel when they overlap the 3D View (#31).
+    from smart_clipping import drawing
+
+    def reg(kind, x, y, w, h):
+        return SimpleNamespace(type=kind, x=x, y=y, width=w, height=h)
+
+    window = reg("WINDOW", 100, 50, 1000, 800)
+    area = SimpleNamespace(regions=[
+        window,
+        reg("HEADER", 100, 850, 1000, 26),                 # above: not overlapping
+        reg("TOOLS", 100, 50, 44, 790),
+        reg("UI", 880, 50, 220, 790),
+        reg("HUD", 150, 50, 260, 32),
+    ])
+    assert drawing._overlap_insets(area, window) == (44, 32, 220),         drawing._overlap_insets(area, window)
+    # Hidden regions (1 px) and no overlap
+    area.regions[2:] = [reg("UI", 880, 50, 1, 1), reg("HUD", 150, 50, 1, 1)]
+    assert drawing._overlap_insets(area, window) == (0, 0, 0)
+    assert drawing._overlap_insets(None, window) == (0, 0, 0)
+
+
 def case_hud_words():
     from smart_clipping import hud
 
@@ -1964,6 +1987,7 @@ CASES = {
     "kdtree_edit_mode_excludes_moving": case_kdtree_edit_mode_excludes_moving,
     "move_decisions": case_move_decisions,
     "hud_words": case_hud_words,
+    "overlay_insets": case_overlay_insets,
     "snap_reached_tolerance": case_snap_reached_tolerance,
     "pivot_objects": case_pivot_objects,
     "build_summary": case_build_summary,
