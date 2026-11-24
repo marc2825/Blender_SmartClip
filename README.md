@@ -25,8 +25,10 @@
 
 ## Installation and usage
 
-1. Download `smart_clipping-vX.Y.Z.zip` from [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) (no need to unzip it).
-2. In Blender 4.0 or later, choose the ZIP under **Preferences → Add-ons → Install from Disk** (**Install** on 4.1 and older) and enable it.
+1. Download the ZIP for your Blender from [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) (no need to unzip it):
+   - Blender 4.2 or later: `smart_clipping-vX.Y.Z-extension.zip` (an extension)
+   - Blender 4.0 / 4.1: `smart_clipping-vX.Y.Z.zip` (a legacy add-on)
+2. Choose the ZIP under **Preferences → Add-ons → Install from Disk** (**Install** on 4.1 and older) and enable it.
 3. Select an object or vertices, press `Shift+G` and move the mouse. Left click confirms, right click cancels.
 
 ## Keys during a move
@@ -46,6 +48,7 @@ While a move runs, the status bar also shows these keys. Settings are in the sid
 
 - **Shortcut**: `Shift+G` is used instead of Blender's Select Grouped and Select Similar (both are still available from the Select menu). You can change or turn off the key in the add-on preferences.
 - **Reference point**: what snaps is the active object's origin in Object Mode, and the median of the selected vertices in Edit Mode.
+- **Extension and legacy add-on**: only one of them can be on at a time; Blender refuses to enable the second one. Settings in the add-on preferences and a changed shortcut do not carry over between them. See [Extension or legacy add-on](docs/details.en.md#extension-or-legacy-add-on) for switching.
 - **Upgrading from v1.x**: right click now cancels, and snapping onto vertices automatically is the default. The gradual pull of v1.x is available as **Snap Behavior → Gradual Pull**. If you are upgrading from v1.1.x or earlier, remove the old version (module `src`) first.
 
 ## Links

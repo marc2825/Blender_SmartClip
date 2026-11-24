@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- An extension for Blender 4.2 and later, `smart_clipping-vX.Y.Z-extension.zip`, prepared for extensions.blender.org. The legacy add-on ZIP stays for Blender 4.0 and later; both have the same features. (#38)
+- Enabling Smart Clipping while another copy is on (the extension and the legacy add-on) is refused with a message naming the copy that is on, which keeps working. (#38)
+
 ## [2.0.3] - 2026-11-25
 
 ### Changed

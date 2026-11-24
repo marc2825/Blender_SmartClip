@@ -2,6 +2,27 @@
 
 This page expands on [Installation and usage](../README.md#installation-and-usage) and [Keys during a move](../README.md#keys-during-a-move) in the README.
 
+## Extension or legacy add-on
+
+From 2.1.0 every release has two ZIPs with the same add-on inside:
+
+| ZIP | Blender | Installs as |
+|---|---|---|
+| `smart_clipping-vX.Y.Z-extension.zip` | 4.2 or later | An extension (module `bl_ext.user_default.smart_clipping` when installed from disk) |
+| `smart_clipping-vX.Y.Z.zip` | 4.0 or later | A legacy add-on (module `smart_clipping`) |
+
+On Blender 4.2 or later, use the extension. Both are installed with **Preferences → Add-ons → Install from Disk** (on 4.2 or later you can also drag the ZIP into Blender); do not unzip them.
+
+**Only one at a time.** Both register the same tool, panel, scene settings and shortcut, so only one can be on. Enabling the second one fails with "Smart Clipping is already enabled as …", naming the one that is on, and leaves that one as it was. Versions before 2.1.0 do not check this, so update or remove an older legacy add-on before installing the extension.
+
+**Moving from the legacy add-on to the extension:**
+
+1. Note your add-on preferences (Snap Behavior, Snap Distance, Snap Point Limit, the colors, Snap Search, Use Shortcut) and a changed shortcut key. They do not carry over: Blender keeps them per add-on, and the extension starts from the defaults.
+2. In **Preferences → Add-ons**, turn the legacy Smart Clipping off and remove it.
+3. Install the extension ZIP, enable it, and set the preferences and key again.
+
+Snap To, its collection and Align Only are saved in each `.blend` file, so they carry over. Moving back works the same way.
+
 ## Controls
 
 | Input | Action |
@@ -168,11 +189,15 @@ In measurements the Screen-space Grid was faster in almost every case: with 100,
 
 ### The add-on does not appear in the list
 
-- Check that you installed the ZIP from Releases (it contains `smart_clipping/__init__.py`).
+- Check that you installed a ZIP from Releases: on Blender 4.0 / 4.1 the one without `-extension` (it contains `smart_clipping/__init__.py`); the extension ZIP needs Blender 4.2 or later.
 - Check that Blender is 4.0 or later.
 - After upgrading from 1.1.x or earlier, remove the old version (module `src`).
 
 Errors are shown in the system console (on Windows, Window > Toggle System Console).
+
+### "Smart Clipping is already enabled as …"
+
+The extension and the legacy add-on are both installed and the other one is on. Turn that one off first; see [Extension or legacy add-on](#extension-or-legacy-add-on).
 
 ### Enabling fails after an update
 

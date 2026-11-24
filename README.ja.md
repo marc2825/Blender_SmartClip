@@ -25,8 +25,10 @@
 
 ## インストールと使い方
 
-1. [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) から `smart_clipping-vX.Y.Z.zip` をダウンロードします（展開は不要です）。
-2. Blender 4.0 以降の **Preferences → Add-ons → Install from Disk**（4.1 以前は **Install**）から ZIP ファイルを選択し、有効化します。
+1. [Releases](https://github.com/marc2825/Blender_SmartClip/releases/latest) から、お使いの Blender に合う ZIP をダウンロードします（展開は不要です）。
+   - Blender 4.2 以降: `smart_clipping-vX.Y.Z-extension.zip`（エクステンション）
+   - Blender 4.0 / 4.1: `smart_clipping-vX.Y.Z.zip`（従来形式のアドオン）
+2. **Preferences → Add-ons → Install from Disk**（4.1 以前は **Install**）から ZIP ファイルを選択し、有効化します。
 3. オブジェクトまたは頂点を選択して `Shift+G` を押し、マウスで移動します。左クリックで確定、右クリックでキャンセルします。
 
 ## 移動中のキー操作
@@ -46,6 +48,7 @@
 
 - **ショートカットの割り当て**: `Shift+G` は Blender 標準の「グループで選択」「類似選択」の代わりに使用されます（標準機能はいずれも「選択」メニューから実行可能です）。キーはアドオン設定から変更・無効化できます。
 - **スナップの基準点**: オブジェクトモードではアクティブオブジェクトの原点、編集モードでは選択頂点の中心が基準となります。
+- **エクステンションと従来形式**: 同時に有効にできるのはどちらか一方だけで、後から有効にしようとした側は Blender が止めます。アドオンの設定と変更したショートカットは引き継がれません。切り替え方は[エクステンションか従来形式か](docs/details.md#エクステンションか従来形式か)を参照してください。
 - **v1.x から更新する場合**: 右クリックがキャンセル動作に変更され、頂点へ自動で吸着する挙動が標準になりました。v1.x の「徐々に引き寄せる」挙動は **スナップのしかた** から選択できます。なお、v1.1.x 以前からは先に旧版（モジュール名 `src`）を削除してください。
 
 ## リンク
