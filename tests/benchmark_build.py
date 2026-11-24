@@ -42,10 +42,11 @@ import smart_clipping  # noqa: E402
 from smart_clipping import detector  # noqa: E402
 
 SUBDIV_LEVELS = 2
-# Generous estimate of the memory one evaluated vertex costs while the scene
-# exists and its snap points are collected (base mesh, evaluated mesh, the
-# copy to_mesh() makes, coordinate arrays).
-BYTES_PER_VERTEX = 900
+# Estimate of the memory one evaluated vertex costs while the scene exists and
+# its snap points are collected (base mesh, evaluated mesh, the copy
+# to_mesh() makes, coordinate arrays): about twice the ~150 bytes measured on
+# Blender 5.2 with 4M vertices.
+BYTES_PER_VERTEX = 300
 
 
 def _args():
