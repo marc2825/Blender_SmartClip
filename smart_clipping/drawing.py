@@ -270,11 +270,11 @@ def _draw_label(x, y, runs, colors, scale):
 
 
 def _overlap_insets(area, region):
-    """Pixels of *region* covered by overlapping regions at its left and bottom
-    (the toolbar with Region Overlap on)."""
-    left = bottom = 0.0
+    """Pixels of *region* covered by overlapping regions at its left, bottom and
+    right: the toolbar and the sidebar with Region Overlap on."""
+    left = bottom = right = 0.0
     if area is None or region is None:
-        return left, bottom
+        return left, bottom, right
     for other in area.regions:
         if other.type == "WINDOW" or other.width <= 1 or other.height <= 1:
             continue
@@ -284,9 +284,12 @@ def _overlap_insets(area, region):
             continue
         if other.x <= region.x + 1 and other.height > region.height * 0.5:
             left = max(left, other.x + other.width - region.x)
+        elif (other.x + other.width >= region.x + region.width - 1
+              and other.height > region.height * 0.5):
+            right = max(right, region.x + region.width - other.x)
         elif other.y <= region.y + 1 and other.width > region.width * 0.5:
             bottom = max(bottom, other.y + other.height - region.y)
-    return left, bottom
+    return left, bottom, right
 
 
 # ------------------------------------------------------------------
@@ -325,6 +328,7 @@ def _draw_3d(op):
             dashes.extend(_dashed_line_points(cand.location, cand.reference_co))
         else:
             # Where the mouse would put it -> where it is -> the snap point
+            # (dashed when constraints keep it off the snap point)
             if free and applied and (free - applied).length > 1e-9:
                 lines.extend([free, applied])
             if applied and (applied - cand.location).length > 1e-9:
@@ -405,7 +409,9 @@ def _draw_2d(op):
                              colors["bg"], scale)
                 w, _h, *_rest = _label_size(op.candidate_runs, scale)
                 x = cand_px.x + 12.0 * scale
-                if x + w > region.width - 8.0 * scale:
+                # Keep it out from under the sidebar: put it on the left
+                _left, _bottom, right = _overlap_insets(context.area, region)
+                if x + w > region.width - right - 8.0 * scale:
                     x = cand_px.x - 12.0 * scale - w
                 _draw_label(x, cand_px.y + 6.0 * scale, op.candidate_runs, colors, scale)
 
@@ -416,7 +422,7 @@ def _draw_2d(op):
                         scale)
 
         if op.mode_runs and region.as_pointer() == op.region_pointer:
-            left, bottom = _overlap_insets(context.area, region)
+            left, bottom, _right = _overlap_insets(context.area, region)
             x = left + 12.0 * scale
             y = bottom + 12.0 * scale
             for runs in reversed(op.mode_runs):

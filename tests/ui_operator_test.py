@@ -10,8 +10,10 @@ Set SMARTCLIP_UI_SCREENSHOT_DIR to save screenshots of the overlays
 (constraint.png, snap.png, align.png) for visual inspection,
 SMARTCLIP_UI_STEP to wait longer between simulated events on slow (software)
 OpenGL, SMARTCLIP_UI_BACKEND=KDTREE to run the checks with the experimental
-KD-tree snap search instead of the default screen-space grid, and
-SMARTCLIP_UI_LANGUAGE=ja_JP to run them with the interface in Japanese.
+KD-tree snap search instead of the default screen-space grid,
+SMARTCLIP_UI_LANGUAGE=ja_JP to run them with the interface in Japanese,
+SMARTCLIP_UI_SCALE=2 to run them at a larger interface scale (as on HiDPI
+displays), and SMARTCLIP_UI_THEME=light to use Blender's light theme.
 
 Exit code 0 = all checks passed, 1 = failures.
 """
@@ -40,6 +42,10 @@ STEP = float(os.environ.get("SMARTCLIP_UI_STEP", "0.15"))
 BACKEND = os.environ.get("SMARTCLIP_UI_BACKEND", "").strip().upper()
 # Interface language, e.g. ja_JP; empty = Blender's default (English).
 LANGUAGE = os.environ.get("SMARTCLIP_UI_LANGUAGE", "").strip()
+# Interface scale (Preferences > Interface > Resolution Scale); empty = 1.
+UI_SCALE = os.environ.get("SMARTCLIP_UI_SCALE", "").strip()
+# "light" = Blender's light theme preset; empty = the default (dark) theme.
+THEME = os.environ.get("SMARTCLIP_UI_THEME", "").strip().lower()
 
 _results = []
 _TEE = None
@@ -214,7 +220,8 @@ def _steps():
     win, area, region, rv3d = _view3d()
     print(f"[ui:test] Blender {bpy.app.version_string}, window {win.width}x{win.height}, "
           f"3D view region {region.width}x{region.height} at ({region.x}, {region.y}), "
-          f"step {STEP}s, search {BACKEND or 'default'}, language {LANGUAGE or 'default'}",
+          f"step {STEP}s, search {BACKEND or 'default'}, language {LANGUAGE or 'default'}, "
+          f"scale {UI_SCALE or 1}, theme {THEME or 'default'}",
           flush=True)
     scene = bpy.context.scene
     scene.smartclip_enabled = True
@@ -920,6 +927,18 @@ def main():
         view.language = LANGUAGE
         view.use_translate_interface = True
         view.use_translate_tooltips = True
+    if UI_SCALE:
+        bpy.context.preferences.view.ui_scale = float(UI_SCALE)
+    if THEME:
+        if THEME != "light":
+            raise SystemExit(f"SMARTCLIP_UI_THEME must be 'light', not {THEME!r}")
+        presets = bpy.utils.preset_paths("interface_theme")
+        light = next((os.path.join(d, f) for d in presets for f in os.listdir(d)
+                      if f.lower().startswith("blender_light")), None)
+        if light is None:
+            raise SystemExit("Blender's light theme preset was not found")
+        bpy.ops.script.execute_preset(filepath=light,
+                                      menu_idname="USERPREF_MT_interface_theme_presets")
     if BACKEND:
         # Registered by path, the add-on has no stored preferences: hand the
         # snap point collection the requested backend directly.
