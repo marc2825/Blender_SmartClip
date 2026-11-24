@@ -146,8 +146,9 @@ def check_build(fmt, out, tracked):
     check(f"{fmt}_named_after_version", first.name == f"smart_clipping-v{version}{suffix}.zip",
           first.name)
     digest = hashlib.sha256(first.read_bytes()).hexdigest()
-    checksum = first.with_suffix(".sha256").read_text(encoding="utf-8")
-    check(f"{fmt}_checksum_matches", checksum == f"{digest}  {first.name}\n", checksum.strip())
+    checksum = first.with_suffix(".sha256").read_bytes()     # as written: LF, for sha256sum -c
+    check(f"{fmt}_checksum_matches", checksum == f"{digest}  {first.name}\n".encode("ascii"),
+          repr(checksum))
     check(f"{fmt}_version_mismatch_refused", _refuses_version(out / f"{fmt}-c", "0.0.0", fmt))
 
 

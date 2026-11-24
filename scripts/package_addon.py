@@ -153,8 +153,9 @@ def build(root: Path, output_dir: Path, expected_version: "str | None" = None,
     output_dir.mkdir(parents=True, exist_ok=True)
     zip_path = output_dir / zip_filename(version, fmt)
     write_zip(root, entries, zip_path)
-    zip_path.with_suffix(".sha256").write_text(
-        f"{sha256_file(zip_path)}  {zip_path.name}\n", encoding="utf-8")
+    # LF on every OS, so that `sha256sum -c` reads it anywhere
+    zip_path.with_suffix(".sha256").write_bytes(
+        f"{sha256_file(zip_path)}  {zip_path.name}\n".encode("ascii"))
     return zip_path
 
 
