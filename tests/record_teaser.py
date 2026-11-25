@@ -16,6 +16,12 @@ while it runs.
   blender --factory-startup --enable-event-simulate --python-exit-code 1 \\
     --python tests/record_teaser.py -- FRAMES_DIR [--language ja_JP]
 
+With --scene-only instead of FRAMES_DIR it only builds the scene and the
+two views and leaves Blender to you, to try the demo's move by hand (no
+simulated input, nothing recorded, the preferences left as they are):
+
+  blender --factory-startup --python tests/record_teaser.py -- --scene-only
+
 Then make the GIF (the two views stacked, 12.5 fps, 1384 px wide):
 
   ffmpeg -framerate 12.5 -i FRAMES_DIR/top_%04d.png -framerate 12.5 \\
@@ -48,17 +54,32 @@ VIEW_BOTTOM = ((1.4, 0.0, 1.6), 12.5)
 
 
 PREVIEW = False
+SCENE_ONLY = False
+
+TRY_IT = """
+[teaser] The demo scene is ready: try the move yourself.
+  1. Point the mouse at the lower (front) view and press Shift+G.
+  2. Move to the lower-left corner of the box on the right: the vertex snaps
+     onto it ("Snapped Near vertex").
+  3. Press A (Align Only X), then X (constrain to X).
+  4. Slide left and right: it stops where its X lines up with the boxes on
+     both sides and with the cube's own left side ("Snapped X coordinate of ...").
+  5. Left click to confirm (right click cancels; Ctrl+Z undoes).
+"""
 
 
 def _args():
-    global PREVIEW
+    global PREVIEW, SCENE_ONLY
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     PREVIEW = "--preview" in argv             # one frame, to check the framing
+    SCENE_ONLY = "--scene-only" in argv       # build the scene, then hand over
+    language = argv[argv.index("--language") + 1] if "--language" in argv else ""
+    if SCENE_ONLY:
+        return None, language
     if not argv:
         raise SystemExit("usage: ... --python tests/record_teaser.py -- FRAMES_DIR "
-                         "[--language ja_JP]")
+                         "[--language ja_JP] (or --scene-only)")
     out = os.path.abspath(argv[0])
-    language = argv[argv.index("--language") + 1] if "--language" in argv else ""
     return out, language
 
 
@@ -111,7 +132,8 @@ def _frames(out):
         bpy.ops.screen.area_split(direction="HORIZONTAL", factor=0.5)
     yield 0.4
     top, bottom = sorted(_view3d_areas(win), key=lambda a: -a.y)
-    bpy.context.preferences.view.ui_scale = UI_SCALE
+    if not SCENE_ONLY:
+        bpy.context.preferences.view.ui_scale = UI_SCALE
     for a in (top, bottom):
         space = a.spaces.active
         space.shading.type = "SOLID"
@@ -143,6 +165,9 @@ def _frames(out):
     rv_top.update()
     rv_bottom.update()
     yield 0.8
+    if SCENE_ONLY:
+        print(TRY_IT, flush=True)
+        return
 
     # The move runs in the front view: there the cursor's offset is the world
     # X / Z offset, so it can be steered to exact coordinates.
@@ -227,10 +252,11 @@ def _frames(out):
 
 def main():
     out, language = _args()
-    os.makedirs(out, exist_ok=True)
-    for name in os.listdir(out):
-        if name.endswith(".png") and name.startswith(("top_", "bottom_", "frame_")):
-            os.remove(os.path.join(out, name))
+    if out is not None:
+        os.makedirs(out, exist_ok=True)
+        for name in os.listdir(out):
+            if name.endswith(".png") and name.startswith(("top_", "bottom_", "frame_")):
+                os.remove(os.path.join(out, name))
     if not hasattr(bpy.types.Scene, "smartclip_target_scope"):
         smart_clipping.register()
     if language:
@@ -244,6 +270,8 @@ def main():
         try:
             return next(steps)
         except StopIteration:
+            if SCENE_ONLY:
+                return None                   # Blender stays open
             print(f"[teaser] frames written to {out}", flush=True)
             os._exit(0)
         except Exception:
