@@ -6,7 +6,7 @@ Security fixes go into the latest release on [GitHub Releases](https://github.co
 
 | Version | Supported |
 |---|---|
-| Latest 2.0.x | Yes |
+| Latest release | Yes |
 | Older | No |
 
 ## Reporting a vulnerability

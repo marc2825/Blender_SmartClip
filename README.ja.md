@@ -56,6 +56,7 @@
 
 - [操作ガイド](docs/details.md)（[English](docs/details.en.md)） / [変更履歴](CHANGELOG.md) / [開発者向け資料](docs/DEVELOPMENT.md)（英語）
 - 質問は [Discussions](https://github.com/marc2825/Snaxis/discussions)、不具合報告は [Issues](https://github.com/marc2825/Snaxis/issues) へお寄せください（[サポート](SUPPORT.md)）。脆弱性は [SECURITY.md](SECURITY.md) の手順に従い、非公開でご報告ください。
+- 改善の要望やアイデアも大歓迎です（[Discussions](https://github.com/marc2825/Snaxis/discussions) / [Issues](https://github.com/marc2825/Snaxis/issues)）。
 
 ## ライセンス
 

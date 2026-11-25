@@ -56,6 +56,7 @@ While a move runs, the status bar also shows these keys. Settings are in the sid
 
 - [Guide](docs/details.en.md) ([日本語](docs/details.md)) / [Changelog](CHANGELOG.md) / [Developer guide](docs/DEVELOPMENT.md)
 - Ask questions in [Discussions](https://github.com/marc2825/Snaxis/discussions) and report bugs in [Issues](https://github.com/marc2825/Snaxis/issues) ([Support](SUPPORT.md)). Please report vulnerabilities privately, following [SECURITY.md](SECURITY.md).
+- Ideas and requests for improvements are very welcome, in [Discussions](https://github.com/marc2825/Snaxis/discussions) or [Issues](https://github.com/marc2825/Snaxis/issues).
 
 ## License
 

@@ -18,6 +18,7 @@ Checks:
   - CHANGELOG.md: newest released entry is ``## [X.Y.Z] - YYYY-MM-DD``
   - CITATION.cff: ``version`` and ``date-released`` match that entry
   - README.md / README.ja.md: the static version badge shows the version
+  - .github/ISSUE_TEMPLATE/bug_report.yml: the example add-on version
 """
 
 from __future__ import annotations
@@ -34,6 +35,8 @@ MANIFEST = "blender_manifest.toml"     # the extension manifest, in ADDON_DIR
 
 _README_BADGE = re.compile(r"img\.shields\.io/badge/version-(?P<version>[0-9.]+)-")
 _READMES = ("README.md", "README.ja.md")
+_BUG_TEMPLATE = ".github/ISSUE_TEMPLATE/bug_report.yml"
+_TEMPLATE_VERSION = re.compile(r'id: addon_version\n(?:.*\n)*?\s*placeholder: "(?P<version>[^"]*)"')
 _CHANGELOG_ENTRY = re.compile(r"^## \[(?P<version>[^\]]+)\](?: - (?P<date>\d{4}-\d{2}-\d{2}))?", re.M)
 
 
@@ -118,6 +121,11 @@ def check(root: Path = ROOT) -> "list[str]":
         if badges != [version]:
             problems.append(f"{name} version badge shows {', '.join(badges) or 'nothing'}, "
                             f"bl_info is {version}")
+
+    template = _TEMPLATE_VERSION.search((root / _BUG_TEMPLATE).read_text(encoding="utf-8"))
+    shown = template["version"] if template else None
+    if shown != version:
+        problems.append(f"{_BUG_TEMPLATE} example version is {shown}, bl_info is {version}")
 
     return problems
 

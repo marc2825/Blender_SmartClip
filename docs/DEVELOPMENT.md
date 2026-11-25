@@ -272,12 +272,13 @@ The release ZIPs hold no images or fonts. `assets/` (logo, demo) is part of the 
 - the newest released entry in `CHANGELOG.md`
 - `version` and `date-released` in `CITATION.cff`
 - the version badge in `README.md` and `README.ja.md`
+- the example add-on version in `.github/ISSUE_TEMPLATE/bug_report.yml`
 
 The badges are static (`img.shields.io/badge/...`): the ones that ask the GitHub API are often too slow for GitHub's image proxy and show up broken.
 
 ## Releasing
 
-1. Bump `bl_info["version"]` and `version` in `smart_clipping/blender_manifest.toml`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff` and the README version badges. Run `python scripts/versioning.py`.
+1. Bump `bl_info["version"]` and `version` in `smart_clipping/blender_manifest.toml`, move the changes under a new `## [X.Y.Z] - YYYY-MM-DD` heading in `CHANGELOG.md`, and update `CITATION.cff`, the README version badges and the bug report template's example version. Run `python scripts/versioning.py`.
 2. Merge to `main` with CI passing.
 3. Optionally preview the package: `gh workflow run release-addon.yml -f version=X.Y.Z` runs the UI tests and builds both ZIPs, their checksums, and the release notes as a workflow artifact without publishing anything.
 4. Tag the release commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. The UI tests run first, on Blender 4.0.2 and 5.2.4 with both snap search backends, and against the installed extension on 4.2.23 and 5.2.4; the release is published only when they pass. If one fails for a reason that is not the add-on's (the virtual display), re-run the failed jobs.
