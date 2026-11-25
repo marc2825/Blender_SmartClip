@@ -35,16 +35,17 @@ Snap To, its collection and Align Only are saved in each `.blend` file, so they 
 | `Shift+X` / `Shift+Y` / `Shift+Z` | Move in the plane excluding that axis |
 | `A` | Switch Align Only: Off → X → Y → Z → Off |
 | `S` | Switch Snap To to the next one that can have something to snap to |
+| `PageUp` / `PageDown`, or `Alt` + wheel | Make the snap distance larger / smaller (by a quarter each step, 1 to 1000 px) |
 | Middle mouse / wheel | Orbit, pan, or zoom without ending the move |
 | Numpad / `Home` | Switch views, zoom, or frame all without ending the move |
 
 The status bar lists these keys during a move.
 
-Mouse and numpad input works mid-move only where the keymap binds it to view navigation; shortcuts that change anything else, such as `Ctrl+Numpad+` (Select More) or `Alt+Wheel` (change frame), do not fire.
+Mouse and numpad input works mid-move only where the keymap binds it to view navigation; shortcuts that change anything else, such as `Ctrl+Numpad+` (Select More), do not fire. `Alt` + wheel changes the snap distance instead of the frame; the wheel alone still zooms.
 
 Press the same key again to release an axis or plane constraint. Constraints use the global axes; a constrained axis is drawn in the theme's axis color, and snapped positions stay on the constrained axis or plane. A vertex off the axis or plane is projected onto it: the move goes to the nearest point on it and the label says "Projected".
 
-Settings switched with `A` and `S` are kept when you confirm and put back when you cancel. Confirming without moving keeps them too, as one operation, like changing them in the panel (in Object Mode, Undo with `Ctrl+Z` puts them back). Confirming when nothing changed records nothing.
+Settings switched with `A`, `S` and the snap distance keys are kept when you confirm and put back when you cancel. Confirming without moving keeps them too, as one operation, like changing them in the panel (in Object Mode, Undo with `Ctrl+Z` puts them back). Confirming when nothing changed records nothing.
 
 ## What the viewport shows during a move
 
@@ -52,9 +53,9 @@ Settings switched with `A` and `S` are kept when you confirm and put back when y
 |---|---|
 | Next to the snap point | Whether the move is snapped to it and what it is, for example "Snapped Cube vertex". With Gradual Pull: "Pulling" and the remaining distance. When a constraint or Lock Location keeps the moving point off it: "Projected" and the distance to it |
 | The snap point's marker | Hollow while the point is only pulled toward it or projected, filled once snapped. Its shape tells what it is: a circle for a vertex, a square for a bounding-box point (see [Snap point limit](#snap-point-limit)), a diamond for a lined-up coordinate |
-| Next to the moving point | How far it moved, in the scene's units, and along which axis or plane |
+| Next to the moving point | How far it moved, in the scene's units (Scene > Units: the unit system, Unit Scale and Length), and along which axis or plane |
 | Dashed ring around the moving point | The snap distance: vertices inside it are within reach. Hidden while snapping is off |
-| Lower left of the viewport | The current Snap To and Align Only, and notes: nothing to snap to (with the reason and what to do), Align Only paused by a constraint, snap point limit reached |
+| Lower left of the viewport | The current Snap To and Align Only (and the snap distance once changed), and notes: nothing to snap to (with the reason and what to do), Align Only paused by a constraint, snap point limit reached |
 
 Colors come from the theme and the Guide / Snap colors; sizes follow the interface scale.
 
@@ -103,7 +104,7 @@ The sidebar panel (**Tool** tab) holds what changes from task to task; its **Lim
 | Checkbox in the panel header | Panel | On | Use Snaxis in this scene. Off: the shortcut key (`Shift+G` unless changed) does what Blender assigns to it here |
 | Snap To | Panel | Visible Objects | Which meshes to snap to ([Snap To](#snap-to)) |
 | Align Only | Panel | Off | Line up a coordinate instead of snapping onto vertices ([Align Only](#align-only)) |
-| Snap Distance | Panel, preferences | 30 px | How close on screen the moving point must come to a snap point |
+| Snap Distance | Panel, preferences | 30 px | How close on screen the moving point must come to a snap point, at interface scale 1: at scale 2 the ring is twice as large. `PageUp` / `PageDown` or `Alt` + wheel change it during a move |
 | Snap Behavior | Limits and Display, preferences | Snap Exactly | [Snap Behavior](#snap-behavior) |
 | Snap Point Limit | Limits and Display, preferences | 50,000 | Most snap points collected when a move starts ([Snap point limit](#snap-point-limit)) |
 | Guide Color / Snap Color | Limits and Display, preferences | Magenta / cyan | Guide line and marker before snapping / while snapped |

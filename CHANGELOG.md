@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- `PageUp` / `PageDown` or `Alt` + wheel during a move make the snap distance (the dashed ring) larger or smaller, by a quarter each step; the lower left of the viewport shows it. Confirming keeps the new distance, cancelling puts it back. The wheel alone still zooms. (#22)
+
+### Changed
+
+- The snap distance follows the interface scale: at Resolution Scale 2 (as on HiDPI screens) the ring and its reach are twice as large. At scale 1 nothing changes. (#22)
+- Lengths in the labels follow Scene > Units > Length. In Blender's default scene (Meters), "50 cm" now reads "0.5 m", as in Blender's own sidebar; with Adaptive, the unit that fits is picked as before. (#22)
+- Switching Snap To with `S` back to one already used in the same move is instant: its snap points are kept until the move ends. (#22)
+
 ## [2.1.1] - 2026-11-25
 
 ### Changed

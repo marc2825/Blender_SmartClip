@@ -41,6 +41,7 @@
 | `X` `Y` `Z` (with `Shift`: plane) | Constrain to an axis or a plane |
 | `A` | Switch the axis to align (off → X → Y → Z) |
 | `S` | Switch what to snap to |
+| `PageUp` / `PageDown` (or `Alt` + wheel) | Make the snap distance (the dashed ring) larger / smaller |
 
 While a move runs, the status bar also shows these keys. Settings are in the sidebar (`N`) > **Tool** tab > **Snaxis**. See the [guide](docs/details.en.md) for what the viewport shows and every setting.
 

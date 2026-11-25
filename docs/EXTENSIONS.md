@@ -35,6 +35,7 @@ Snaxis (formerly Smart Clipping) shows guide lines to nearby vertices while you 
 - **Axis and plane constraints**: `X` / `Y` / `Z` (with `Shift` for a plane), as in Blender's own move. A snap point the constrained move cannot reach is labeled "Projected" with the remaining distance.
 - **Object Mode and Edit Mode**: moves the selected objects (the active object's origin snaps) or the selected vertices (their median snaps).
 - **Choose what to snap to**: the same mesh, selected objects, everything visible, or a collection (`S` while moving).
+- **Change the snap distance while moving**: `PageUp` / `PageDown` or `Alt` + wheel make the range (the dashed ring) larger or smaller. It grows with the interface scale on HiDPI screens.
 - **Snap Behavior**: Snap Exactly (default) or Gradual Pull.
 - Interface in English and Japanese.
 
@@ -59,6 +60,15 @@ Documentation, source code and issue tracker: https://github.com/marc2825/Snaxis
 
 ```markdown
 First release on the platform. Formerly called Smart Clipping, with the same features as its legacy add-on on GitHub; enabling the extension and the legacy add-on together is refused with a message.
+```
+
+For 2.2.0:
+
+```markdown
+- PageUp / PageDown or Alt + wheel change the snap distance during a move (kept when you confirm, put back when you cancel); the wheel alone still zooms.
+- The snap distance follows the interface scale.
+- Lengths in the labels follow Scene > Units > Length (in Blender's default scene, meters).
+- Switching Snap To back with S is instant.
 ```
 
 ## Media
