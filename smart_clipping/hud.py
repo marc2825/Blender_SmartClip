@@ -16,12 +16,36 @@ from .utils import SCOPE_NAMES, SNAP_PULL, STATE_PROJECTED, STATE_PULLING, STATE
 GAP = (None, "gap")
 
 
+# Scene > Units > Length, when it is not Adaptive: (metres per unit, symbol)
+_LENGTH_UNITS = {
+    "KILOMETERS": (1000.0, " km"),
+    "METERS": (1.0, " m"),
+    "CENTIMETERS": (0.01, " cm"),
+    "MILLIMETERS": (0.001, " mm"),
+    "MICROMETERS": (0.000001, " \u00b5m"),
+    "MILES": (1609.344, " mi"),
+    "FEET": (0.3048, "'"),
+    "INCHES": (0.0254, '"'),
+    "THOU": (0.0000254, " thou"),
+}
+
+
+def _number(value: float) -> str:
+    text = f"{value:.4f}".rstrip("0").rstrip(".")
+    return "0" if text in ("", "-0") else text
+
+
 def format_length(value: float, scene) -> str:
-    """A length in the scene's unit system (Scene > Units), like Blender's header."""
+    """A length in the scene's units (Scene > Units), like Blender's header:
+    in the chosen Length unit, or the fitting one when it is Adaptive."""
     units = getattr(scene, "unit_settings", None)
     if units is None or units.system == "NONE":
         return f"{value:.3f}"
     scaled = value * units.scale_length
+    fixed = _LENGTH_UNITS.get(getattr(units, "length_unit", "ADAPTIVE"))
+    if fixed is not None and not units.use_separate:
+        per_unit, symbol = fixed
+        return _number(scaled / per_unit) + symbol
     try:
         return bpy.utils.units.to_string(units.system, "LENGTH", scaled, precision=4,
                                          split_unit=bool(units.use_separate))
@@ -86,15 +110,21 @@ def empty_reason(scope, is_edit, has_collection) -> str:
     return iface("No visible meshes found")
 
 
-def mode_lines(scope, align_axes, align_blocked, constraint, empty, limit_exceeded) -> list:
+def mode_lines(scope, align_axes, align_blocked, constraint, empty, limit_exceeded,
+               snap_distance=None) -> list:
     """Lines in the corner of the viewport: the settings S and A switch, and notes.
 
     *empty*: the reason from empty_reason() when there is nothing to snap to.
+    *snap_distance*: the px once PageUp / PageDown or Alt+Wheel changed it.
     """
-    lines = [[
+    first = [
         (iface("Snap To"), "muted"), (scope_name(scope), "text"), GAP,
         (iface("Align Only"), "muted"), (axes_text(align_axes), "text"),
-    ]]
+    ]
+    if snap_distance is not None:
+        first += [GAP, (iface("Snap Distance"), "muted"),
+                  (f"{int(snap_distance)} px", "text")]
+    lines = [first]
     if empty:
         lines.append([(iface("Nothing to snap to."), "warning"), (empty, "text")])
     elif align_blocked:
@@ -122,13 +152,14 @@ def status_items(behavior) -> list:
         (("EVENT_SHIFT", "EVENT_X", "EVENT_Y", "EVENT_Z"), "Plane"),
         (("EVENT_A",), "Align Only"),
         (("EVENT_S",), "Snap To"),
+        (("EVENT_PAGEUP", "EVENT_PAGEDOWN"), "Snap Distance"),
     ]
 
 
 _KEY_NAMES = {
     "MOUSE_LMB": "LMB", "MOUSE_RMB": "RMB", "EVENT_ESC": "Esc", "EVENT_CTRL": "Ctrl",
     "EVENT_SHIFT": "Shift", "EVENT_X": "X", "EVENT_Y": "Y", "EVENT_Z": "Z",
-    "EVENT_A": "A", "EVENT_S": "S",
+    "EVENT_A": "A", "EVENT_S": "S", "EVENT_PAGEUP": "PgUp", "EVENT_PAGEDOWN": "PgDn",
 }
 
 

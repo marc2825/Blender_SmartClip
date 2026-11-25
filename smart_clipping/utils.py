@@ -8,6 +8,12 @@ from bpy_extras.view3d_utils import location_3d_to_region_2d, region_2d_to_locat
 DEFAULT_SNAP_DISTANCE_PX = 30
 DEFAULT_VERTEX_BUDGET = 50_000
 
+# Snap Distance (px at interface scale 1, the preference's range) and the
+# factor PageUp / PageDown or Alt+Wheel change it by during a move.
+SNAP_DISTANCE_MIN_PX = 1
+SNAP_DISTANCE_MAX_PX = 1000
+SNAP_DISTANCE_STEP = 1.25
+
 # Snap candidate search methods (Advanced Settings).  Both return the same
 # candidates; see detector.py.
 SEARCH_GRID = "GRID"
@@ -178,6 +184,47 @@ def snap_rule(behavior, ctrl_held) -> tuple:
     if behavior == SNAP_PULL:
         return True, bool(ctrl_held)
     return not ctrl_held, True
+
+
+def step_snap_distance(px, steps) -> int:
+    """Snap Distance after *steps* presses: up (+) or down (-) by SNAP_DISTANCE_STEP.
+
+    Every step changes it by at least 1 px, within the preference's range.
+    """
+    value = int(px)
+    for _ in range(abs(int(steps))):
+        if steps > 0:
+            value = max(value + 1, round(value * SNAP_DISTANCE_STEP))
+        else:
+            value = min(value - 1, round(value / SNAP_DISTANCE_STEP))
+    return max(SNAP_DISTANCE_MIN_PX, min(SNAP_DISTANCE_MAX_PX, value))
+
+
+def snap_distance_on_screen(px, ui_scale) -> float:
+    """Snap Distance in screen pixels: the setting (px at interface scale 1)
+    times the interface scale, so it keeps its size next to the text."""
+    return float(px) * (ui_scale if ui_scale and ui_scale > 0.0 else 1.0)
+
+
+def snap_distance_steps(event_type, value, alt=False, ctrl=False, shift=False,
+                        oskey=False) -> int:
+    """Steps an event changes Snap Distance by during a move (0: none).
+
+    PageUp / PageDown (as proportional size in Blender's move), or the wheel
+    with Alt alone held; the wheel without it still zooms the view.
+    """
+    if value != "PRESS":
+        return 0
+    if event_type == "PAGE_UP":
+        return 1
+    if event_type == "PAGE_DOWN":
+        return -1
+    if alt and not (ctrl or shift or oskey):
+        if event_type == "WHEELUPMOUSE":
+            return 1
+        if event_type == "WHEELDOWNMOUSE":
+            return -1
+    return 0
 
 
 def pull_ratio(screen_dist, threshold_px, strength) -> float:

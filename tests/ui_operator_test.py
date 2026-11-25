@@ -830,6 +830,95 @@ def _steps():
     ev("ESC", "PRESS")
     yield STEP
     check("esc_restores_snap_to", scene.smartclip_target_scope == "VISIBLE")
+
+    # Switching back to a Snap To used in this move reuses its snap points
+    with _MoveSpy() as spy:
+        yield from start_modal("snap_to_reuse")
+        ev("MOUSEMOVE", "NOTHING", dx=20)
+        yield STEP
+        op = spy.op
+        first = op._build if op is not None else None
+        seen = []
+        for _ in range(4):
+            ev("S", "PRESS")
+            ev("S", "RELEASE")
+            yield STEP
+            seen.append(scene.smartclip_target_scope)
+            if seen[-1] == "VISIBLE":
+                break
+        check("s_back_reuses_snap_points",
+              op is not None and first is not None and seen[-1:] == ["VISIBLE"]
+              and op._build is first and len(op._builds) >= 2, str(seen))
+        ev("ESC", "PRESS")
+        yield STEP
+
+    # Snap Distance: the interface scale, PageUp / PageDown and Alt+Wheel
+    utils = smart_clipping.utils
+    prefs = smart_clipping.prefs.get_addon_prefs(bpy.context)
+    base = prefs.snap_distance_px if prefs is not None else utils.DEFAULT_SNAP_DISTANCE_PX
+    scale = bpy.context.preferences.system.ui_scale
+    up = utils.step_snap_distance(base, 1)
+    down = utils.step_snap_distance(up, -2)
+    view_distance = rv3d.view_distance
+    with _MoveSpy() as spy:
+        yield from start_modal("snap_distance")
+        ev("MOUSEMOVE", "NOTHING", dx=20)
+        yield STEP
+        op = spy.op
+        check("snap_distance_follows_interface_scale",
+              op is not None and abs(op.threshold_px - base * scale) < 1e-6,
+              f"{getattr(op, 'threshold_px', None)} for {base} px at scale {scale}")
+        ev("PAGE_UP", "PRESS")
+        ev("PAGE_UP", "RELEASE")
+        yield STEP
+        check("page_up_raises_snap_distance",
+              op is not None and op.snap_distance == up
+              and abs(op.threshold_px - up * scale) < 1e-6,
+              f"{getattr(op, 'snap_distance', None)} (expected {up})")
+        texts = [text for line in (op.mode_runs if op is not None else []) for text, _role in line]
+        check("snap_distance_in_mode_lines", f"{up} px" in texts, str(texts))
+        ev("WHEELDOWNMOUSE", "PRESS", alt=True)
+        ev("WHEELDOWNMOUSE", "PRESS", alt=True)
+        yield STEP
+        check("alt_wheel_lowers_snap_distance_without_zoom",
+              op is not None and op.snap_distance == down and rv3d.view_distance == view_distance,
+              f"{getattr(op, 'snap_distance', None)} (expected {down}), view distance "
+              f"{view_distance:.3f} -> {rv3d.view_distance:.3f}")
+        ev("WHEELUPMOUSE", "PRESS")
+        yield STEP
+        check("wheel_still_zooms", op is not None and op.snap_distance == down
+              and rv3d.view_distance != view_distance,
+              f"view distance {view_distance:.3f} -> {rv3d.view_distance:.3f}")
+        ev("ESC", "PRESS")
+        yield STEP
+    rv3d.view_distance = view_distance
+    rv3d.update()
+    check("esc_keeps_snap_distance_setting",
+          prefs is None or prefs.snap_distance_px == base, str(getattr(prefs, "snap_distance_px", None)))
+    with _MoveSpy() as spy:
+        yield from start_modal("snap_distance_confirm")
+        ev("MOUSEMOVE", "NOTHING", dx=20)
+        yield STEP
+        op = spy.op
+        check("next_move_starts_from_setting", op is not None and op.snap_distance == base,
+              str(getattr(op, "snap_distance", None)))
+        ev("PAGE_UP", "PRESS")
+        ev("PAGE_UP", "RELEASE")
+        yield STEP
+        ev("LEFTMOUSE", "PRESS")
+        ev("LEFTMOUSE", "RELEASE")
+        yield STEP
+    if prefs is None:
+        skip("confirm_keeps_snap_distance",
+             "(registered from the source folder: no add-on preferences to keep it in)")
+    else:
+        check("confirm_keeps_snap_distance", prefs.snap_distance_px == up,
+              f"{prefs.snap_distance_px} (expected {up})")
+        prefs.snap_distance_px = base
+    child.location = start_loc
+    bpy.context.view_layer.update()
+    yield STEP
+
     scene.smartclip_target_collection = None
     bpy.data.collections.remove(coll)
     bpy.context.view_layer.update()

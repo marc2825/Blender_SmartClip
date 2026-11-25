@@ -1700,11 +1700,34 @@ def case_hud_words():
 
     scene = bpy.context.scene
     units = scene.unit_settings
-    saved = (units.system, units.scale_length, units.use_separate)
+    saved = (units.system, units.scale_length, units.use_separate, units.length_unit)
     try:
+        # A fixed Length unit is used as it is (not the one Blender would pick)
+        units.system = "METRIC"
+        units.scale_length = 1.0
+        units.use_separate = False
+        for unit, value, expected in (("CENTIMETERS", 1.25, "125 cm"),
+                                      ("MILLIMETERS", 0.0305, "30.5 mm"),
+                                      ("METERS", 0.03, "0.03 m"),
+                                      ("KILOMETERS", 1500.0, "1.5 km")):
+            units.length_unit = unit
+            text = hud.format_length(value, scene)
+            assert text == expected, (unit, text)
+        units.length_unit = "CENTIMETERS"
+        units.scale_length = 0.01          # 1 unit = 1 cm
+        assert hud.format_length(1.25, scene) == "1.25 cm", hud.format_length(1.25, scene)
+        units.scale_length = 1.0
+        units.length_unit = "ADAPTIVE"
+        units.system = "IMPERIAL"
+        units.length_unit = "INCHES"
+        text = hud.format_length(0.3048, scene)
+        assert text == '12"', text
+        units.length_unit = "ADAPTIVE"
         units.system = "NONE"
         assert hud.format_length(1.5, scene) == "1.500", hud.format_length(1.5, scene)
+        # Adaptive: the unit that fits the value, as Blender picks it
         units.system = "METRIC"
+        units.length_unit = "ADAPTIVE"
         units.scale_length = 1.0
         units.use_separate = False
         text = hud.format_length(1.25, scene)
@@ -1713,11 +1736,16 @@ def case_hud_words():
         text = hud.format_length(1.25, scene)
         assert text.replace(" ", "") == "1.25cm", text
         units.system = "IMPERIAL"
+        units.length_unit = "ADAPTIVE"
         units.scale_length = 1.0
         text = hud.format_length(0.3048, scene)
         assert "'" in text or "ft" in text, text
     finally:
-        units.system, units.scale_length, units.use_separate = saved
+        units.system, units.scale_length, units.use_separate = saved[:3]
+        try:
+            units.length_unit = saved[3]
+        except TypeError:
+            pass
 
     def cand(kind, name="Cube"):
         return detector.SnapCandidate(kind, Vector(), Vector(), 3.0, 3.0, name)
@@ -1745,6 +1773,9 @@ def case_hud_words():
     assert empty[1][0] == ("Nothing to snap to.", "warning") and "Edit Mode" in empty[1][1][0]
     assert "collection" in hud.empty_reason("COLLECTION", False, False)
     assert "Select" in hud.empty_reason("SELECTED", False, False)
+    changed = hud.mode_lines("VISIBLE", frozenset(), False, None, None, False, 38)
+    words = [text for text, _role in changed[0] if text]
+    assert words[-2:] == ["Snap Distance", "38 px"], words
     assert hud.limit_detail(3, 0) == "3 objects simplified"
     assert hud.limit_detail(3, 2) == "3 simplified, 2 left out"
 
@@ -1760,6 +1791,33 @@ def case_hud_words():
         assert all(icon != "NONE" for _text, icon in log), log
     line = hud.status_text(utils.SNAP_EXACT)
     assert "RMB/Esc Cancel" in line and "Shift+X/Y/Z Plane" in line, line
+    assert "PgUp/PgDn Snap Distance" in line, line
+
+
+def case_snap_distance_keys():
+    step = utils.step_snap_distance
+    assert step(30, 1) == 38 and step(30, -1) == 24, (step(30, 1), step(30, -1))
+    assert step(30, 2) == step(step(30, 1), 1)
+    # At least 1 px a step, within the preference's range
+    assert step(1, 1) == 2 and step(2, 1) == 3 and step(3, -1) == 2
+    assert step(1, -1) == 1 and step(1000, 1) == 1000 and step(990, 3) == 1000
+    assert step(30, 0) == 30
+    rna = _sub("prefs").SMARTCLIP_AddonPreferences.bl_rna.properties["snap_distance_px"]
+    assert (rna.hard_min, rna.hard_max) == (utils.SNAP_DISTANCE_MIN_PX, utils.SNAP_DISTANCE_MAX_PX)
+    # On screen it grows with the interface scale
+    assert utils.snap_distance_on_screen(30, 2.0) == 60.0
+    assert utils.snap_distance_on_screen(30, 1.0) == 30.0
+    assert utils.snap_distance_on_screen(30, 0.0) == 30.0
+    # Which events change it: PageUp / PageDown, and the wheel with Alt alone
+    keys = utils.snap_distance_steps
+    assert keys("PAGE_UP", "PRESS") == 1 and keys("PAGE_DOWN", "PRESS") == -1
+    assert keys("PAGE_UP", "RELEASE") == 0
+    assert keys("WHEELUPMOUSE", "PRESS", alt=True) == 1
+    assert keys("WHEELDOWNMOUSE", "PRESS", alt=True) == -1
+    assert keys("WHEELUPMOUSE", "PRESS") == 0            # the wheel alone zooms
+    assert keys("WHEELUPMOUSE", "PRESS", alt=True, ctrl=True) == 0
+    assert keys("WHEELUPMOUSE", "PRESS", alt=True, shift=True) == 0
+    assert keys("A", "PRESS", alt=True) == 0
 
 
 def case_build_summary():
@@ -2017,6 +2075,7 @@ CASES = {
     "kdtree_edit_mode_excludes_moving": case_kdtree_edit_mode_excludes_moving,
     "move_decisions": case_move_decisions,
     "hud_words": case_hud_words,
+    "snap_distance_keys": case_snap_distance_keys,
     "overlay_insets": case_overlay_insets,
     "snap_reached_tolerance": case_snap_reached_tolerance,
     "pivot_objects": case_pivot_objects,

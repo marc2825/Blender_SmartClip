@@ -99,8 +99,11 @@ MESSAGES = {
     "Gradual Pull": "徐々に引き寄せる",
     "Pull towards the snap point, more strongly the closer it is. Hold Ctrl to snap exactly":
         "近いほど強くスナップ点へ引き寄せます。Ctrl を押している間はぴったり合わせます",
-    "How close on screen the moving point must come to a snap point":
-        "スナップするまでの、動かしている点とスナップ点の画面上の距離です",
+    "How close on screen the moving point must come to a snap point, "
+    "at interface scale 1 (it grows with the scale). PageUp / PageDown "
+    "or Alt+Wheel change it while moving":
+        "スナップするまでの、動かしている点とスナップ点の画面上の距離です。インターフェイスの拡大率 1 "
+        "のときの値で、拡大率に合わせて大きくなります。移動中は PageUp / PageDown か Alt＋ホイールで変えられます",
     "Snap Point Limit": "スナップ点の上限",
     "Most snap points collected when a move starts, nearest objects first. Past the limit, "
     "objects get only their bounding box corners and origin, and the farthest are left out":

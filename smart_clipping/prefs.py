@@ -73,7 +73,9 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
 
     snap_distance_px: IntProperty(
         name="Snap Distance",
-        description="How close on screen the moving point must come to a snap point",
+        description=("How close on screen the moving point must come to a snap point, "
+                     "at interface scale 1 (it grows with the scale). PageUp / PageDown "
+                     "or Alt+Wheel change it while moving"),
         default=DEFAULT_SNAP_DISTANCE_PX,
         min=1,
         max=1000,

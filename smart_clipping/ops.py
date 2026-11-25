@@ -17,8 +17,9 @@ execute -- apply ``offset`` directly (redo panel / scripting).
 Keys during a move: LMB / Enter confirm; RMB / Esc cancel; holding Ctrl moves
 freely (Snap Exactly) or snaps exactly (Gradual Pull); X / Y / Z and
 Shift+X / Y / Z constrain to an axis / plane; A cycles Align Only; S cycles
-Snap To.  Settings changed with A and S are kept when the move is confirmed
-and put back when it is cancelled, like Blender's own transform.
+Snap To; PageUp / PageDown or Alt+Wheel change Snap Distance.  Settings
+changed with these keys are kept when the move is confirmed and put back when
+it is cancelled, like Blender's own transform.
 """
 
 import traceback
@@ -47,7 +48,10 @@ from .utils import (
     pixel_world_size,
     pull_ratio,
     screen_to_world,
+    snap_distance_on_screen,
+    snap_distance_steps,
     snap_rule,
+    step_snap_distance,
     world_to_location_matrix,
     world_to_screen,
 )
@@ -566,8 +570,11 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         if prefs:
             self.color_guide = tuple(prefs.color_guide)
             self.color_snap = tuple(prefs.color_snap)
-            self.threshold_px = prefs.snap_distance_px
+            self.snap_distance = prefs.snap_distance_px
             self._behavior = prefs.snap_behavior
+        self._snap_distance_at_start = self.snap_distance
+        self._ui_scale = _interface_scale(context)
+        self.threshold_px = snap_distance_on_screen(self.snap_distance, self._ui_scale)
         self._ctrl_held = bool(event.ctrl)
 
         # Resolve the 3-D view region we'll use for projections
@@ -645,6 +652,7 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             moved = (self.applied_world is not None
                      and (self.applied_world - self._start_world).length > 0.0)
             changed = _read_settings(scene) != self._settings_at_start
+            self._keep_snap_distance(context)
             if moved or changed:
                 self.offset = (self.applied_world - self._start_world if moved
                                else Vector((0.0, 0.0, 0.0)))
@@ -657,6 +665,14 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             # panel entry.  Settings changed with A / S alone are one undo
             # step, as when they are changed in the panel.
             return {"FINISHED"} if moved or changed else {"CANCELLED"}
+
+        # PageUp / PageDown or Alt+Wheel: Snap Distance (before navigation,
+        # which the wheel alone still does)
+        steps = snap_distance_steps(event.type, event.value, event.alt, event.ctrl,
+                                    event.shift, event.oskey)
+        if steps:
+            self._change_snap_distance(context, steps)
+            return {"RUNNING_MODAL"}
 
         # Pass through viewport navigation (orbit / pan / zoom / numpad views)
         if passes_to_navigation(context, event):
@@ -730,7 +746,14 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 
         # Exposed to drawing callbacks
         self.region_pointer = 0
-        self.threshold_px = DEFAULT_SNAP_DISTANCE_PX
+        self.snap_distance = DEFAULT_SNAP_DISTANCE_PX   # px at interface scale 1
+        self._snap_distance_at_start = DEFAULT_SNAP_DISTANCE_PX
+        self.snap_distance_changed = False
+        self._ui_scale = 1.0
+        self.threshold_px = float(DEFAULT_SNAP_DISTANCE_PX)   # on screen (scaled)
+        # Snap points collected during this move, per Snap To: switching back
+        # with S is instant
+        self._builds = {}
         self.free_world = None
         self.applied_world = None   # where the move puts the pivot (constraint applied)
         self.pivot_world = None     # where the pivot is (Location Lock, object constraints)
@@ -751,21 +774,30 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
         self._handle_2d = None
 
     def _rebuild(self, context):
-        """Collect the snap points for the current Snap To."""
+        """Snap points for the current Snap To: collected once per move.
+
+        Nothing they come from can change during a move (the move takes
+        every event), so the points of a Snap To used before are kept.
+        """
         scene = context.scene
-        if self._is_edit:
-            self._build = detector.build_spatial_tree(
-                context, active_obj=self._active_obj,
-                moving_verts={m.obj: set(m.init_cos) for m in self._movers},
-                view=(self._region, self._rv3d),
-            )
-        else:
-            self._build = detector.build_spatial_tree(
-                context, active_obj=self._active_obj,
-                exclude_objects=[m.obj for m in self._movers],
-                view=(self._region, self._rv3d),
-            )
-        summary = build_summary(self._build)
+        collection = scene.smartclip_target_collection
+        key = (scene.smartclip_target_scope,
+               collection.as_pointer() if collection is not None else 0)
+        if key not in self._builds:
+            if self._is_edit:
+                build = detector.build_spatial_tree(
+                    context, active_obj=self._active_obj,
+                    moving_verts={m.obj: set(m.init_cos) for m in self._movers},
+                    view=(self._region, self._rv3d),
+                )
+            else:
+                build = detector.build_spatial_tree(
+                    context, active_obj=self._active_obj,
+                    exclude_objects=[m.obj for m in self._movers],
+                    view=(self._region, self._rv3d),
+                )
+            self._builds[key] = (build, build_summary(build))
+        self._build, summary = self._builds[key]
         _last_builds[scene.as_pointer()] = summary
         self.limit_exceeded = summary.limit_exceeded
         if summary.points:
@@ -834,6 +866,25 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             scene.smartclip_target_scope = scope
             self._rebuild(context)
         _tag_redraw_view3d(context)
+
+    def _change_snap_distance(self, context, steps):
+        value = step_snap_distance(self.snap_distance, steps)
+        self.snap_distance_changed = True
+        if value != self.snap_distance:
+            self.snap_distance = value
+            self.threshold_px = snap_distance_on_screen(value, self._ui_scale)
+        self._do_snap(context)
+
+    def _keep_snap_distance(self, context):
+        """On confirm: a Snap Distance changed mid-move becomes the setting."""
+        if self.snap_distance == self._snap_distance_at_start:
+            return
+        prefs = get_addon_prefs(context)
+        if prefs is not None:
+            try:
+                prefs.snap_distance_px = self.snap_distance
+            except (AttributeError, TypeError, ValueError):
+                pass
 
     # ----------------------------------------------------- view changes
     def _sync_view(self):
@@ -994,7 +1045,9 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
             self.moved_label = ""
         self.mode_runs = hud.mode_lines(scene.smartclip_target_scope, self.align_axes,
                                         self.align_blocked, self.constraint_mode,
-                                        self._empty_reason, self.limit_exceeded)
+                                        self._empty_reason, self.limit_exceeded,
+                                        self.snap_distance if self.snap_distance_changed
+                                        else None)
 
     # ----------------------------------------------- draw handler mgmt
     def _add_draw_handlers(self):
@@ -1028,6 +1081,15 @@ class SMARTCLIP_OT_modal_move(bpy.types.Operator):
 # ------------------------------------------------------------------
 # Helpers (module-level)
 # ------------------------------------------------------------------
+
+def _interface_scale(context) -> float:
+    """Preferences > Interface > Resolution Scale, with the display's DPI."""
+    try:
+        scale = context.preferences.system.ui_scale
+    except AttributeError:
+        return 1.0
+    return scale if scale > 0.0 else 1.0
+
 
 def _resolve_region(context):
     """Return (region, rv3d) for the active 3-D viewport."""
