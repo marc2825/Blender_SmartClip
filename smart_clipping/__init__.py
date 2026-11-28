@@ -4,7 +4,7 @@
 bl_info = {
     "name": "Snaxis",
     "author": "marc2825",
-    "version": (2, 2, 0),
+    "version": (2, 3, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Tool > Snaxis",
     "description": "Move with guide lines that snap to nearby vertices, line up coordinates "
