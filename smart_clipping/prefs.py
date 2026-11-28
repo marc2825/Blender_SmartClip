@@ -1,12 +1,10 @@
 # SPDX-FileCopyrightText: 2026 marc2825
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatVectorProperty, IntProperty
+from bpy.props import EnumProperty, FloatVectorProperty, IntProperty
 from bpy.types import AddonPreferences
 
 from . import keymap
-from .i18n import iface
 from .utils import (
     DEFAULT_SEARCH_BACKEND,
     DEFAULT_SNAP_BEHAVIOR,
@@ -41,10 +39,6 @@ def get_addon_prefs(context) -> "SMARTCLIP_AddonPreferences | None":
     if addon:
         return addon.preferences
     return None
-
-
-def _on_hotkeys_enabled(self, _context):
-    keymap.apply_active(self.hotkeys_enabled)
 
 
 def _section(layout, idname, title):
@@ -104,16 +98,6 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
         default=DEFAULT_SEARCH_BACKEND,
     )
 
-    hotkeys_enabled: BoolProperty(
-        name="Use Shortcut",
-        description=(
-            "Start Move with Guides with the shortcut below. When off, the key does what "
-            "Blender assigns to it"
-        ),
-        default=True,
-        update=_on_hotkeys_enabled,
-    )
-
     color_guide: FloatVectorProperty(
         name="Guide Color",
         description="Color of the guide line and target marker before snapping",
@@ -154,24 +138,24 @@ class SMARTCLIP_AddonPreferences(AddonPreferences):
 
         body = _section(layout, "smartclip_prefs_shortcut", "Shortcut")
         if body:
-            body.prop(self, "hotkeys_enabled")
-            # The keys are shown only while the shortcut is on: Blender records
-            # a key change against the item's on/off state, so a change made
-            # while it is off would not apply once it is on again.
-            if self.hotkeys_enabled:
-                col = body.column()
-                for label, km, kmi in keymap.user_items():
-                    col.prop(kmi, "type", text=label, full_event=True)
-                    # Shift+G by default: say what it takes over, and how to keep it
-                    taken = keymap.overridden_name(km, kmi)
-                    if taken:
-                        # Under the key field, past the label column
-                        note = col.split(factor=0.4)
-                        note.label(text="")
-                        note.label(text=iface("Used instead of {name}").format(name=taken),
-                                   icon="INFO", translate=False)
-            row = body.row()
-            row.operator("smartclip.add_default_hotkeys", icon="LOOP_BACK")
+            # The add-on's own keymap item, as the user keymap has it: turning
+            # it off or changing the key here is the same as in
+            # Preferences > Keymap, and Blender keeps it with the preferences.
+            found = keymap.user_item()
+            if found is None:
+                body.label(text="The shortcut is not available (no keymap in this session)",
+                           icon="INFO")
+            else:
+                km, kmi = found
+                row = body.row(align=True)
+                row.context_pointer_set("keymap", km)
+                row.prop(kmi, "active", text="")
+                sub = row.row(align=True)
+                sub.active = kmi.active
+                sub.prop(kmi, "type", text="Move with Guides", full_event=True)
+                if kmi.is_user_modified:
+                    row.operator("preferences.keyitem_restore", text="",
+                                 icon="BACK").item_id = kmi.id
 
         body = _section(layout, "smartclip_prefs_advanced", "Advanced")
         if body:

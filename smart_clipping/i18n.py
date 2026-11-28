@@ -45,21 +45,12 @@ MESSAGES = {
     "Move with Guides needs a 3D Viewport": "3D ビューポートの中で使ってください",
     "Move with Guides stopped because of an internal error (see the system console)":
         "内部エラーのため移動を中止しました（詳細はシステムコンソールにあります）",
-    "Reset Shortcut": "ショートカットを初期状態に戻す",
-    "Set the shortcut back to Shift+G in Object Mode and mesh Edit Mode and turn it on":
-        "オブジェクトモードとメッシュの編集モードのショートカットを Shift+G に戻し、オンにします",
-    "Turn Off Shortcut": "ショートカットをオフにする",
-    "Used instead of {name}": "「{name}」の代わりに使われます",
-    "Turn off the shortcut so the key does what Blender assigns to it":
-        "ショートカットをオフにし、キーを Blender 本来の機能に戻します",
 
     # Sidebar panel and scene settings
     "Limits and Display": "上限と表示",
     "Enable Snaxis": "Snaxis を使う",
-    "Use Snaxis in this scene. When off, its shortcut (Shift+G unless changed) "
-    "does what Blender assigns to the key":
-        "このシーンで Snaxis を使います。オフのときは、ショートカットのキー"
-        "（初期設定は Shift+G）が Blender 本来の機能として働きます",
+    "Use Snaxis in this scene. When off, Move with Guides does not start here":
+        "このシーンで Snaxis を使います。オフのときは、このシーンでは「ガイド付きで移動」が始まりません",
     "Which meshes the move snaps to. Press S while moving to switch":
         "移動中にスナップする先のメッシュです。移動中は S キーで切り替えられます",
     "Same Mesh": "同じメッシュ",
@@ -123,11 +114,8 @@ MESSAGES = {
         "移動を始めるときに作る KD-tree で 3D 空間の候補を絞り、画面上の距離を調べます。"
         "通常は格子より遅く、動かしている点の周りに点が密集していると大幅に遅くなります",
     "Shortcut": "ショートカット",
-    "Use Shortcut": "ショートカットを使う",
-    "Start Move with Guides with the shortcut below. When off, the key does what Blender "
-    "assigns to it":
-        "下のショートカットで「ガイド付きで移動」を始めます。オフのときは、そのキーが Blender "
-        "本来の機能として働きます",
+    "The shortcut is not available (no keymap in this session)":
+        "ショートカットを表示できません（このセッションにはキーマップがありません）",
     "Guide Color": "ガイドの色",
     "Color of the guide line and target marker before snapping":
         "スナップする前のガイド線と目標マーカーの色です",
@@ -166,7 +154,7 @@ MESSAGES = {
 }
 
 # Operator names are looked up in the "Operator" context as well.
-OPERATOR_MESSAGES = ("Move with Guides", "Reset Shortcut", "Turn Off Shortcut")
+OPERATOR_MESSAGES = ("Move with Guides",)
 
 LOCALES = ("ja_JP",)
 

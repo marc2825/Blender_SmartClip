@@ -116,7 +116,7 @@ jobs:
           BLENDER_USER_EXTENSIONS="${user}/extensions" \
             "${blender}" --background --factory-startup --python-exit-code 1 \
               --python tests/extension_install_test.py -- \
-                --phase install "${ext}" "dist/snaxis-v${VERSION}.zip"
+                --phase install "${ext}"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v7

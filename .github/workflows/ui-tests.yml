@@ -95,11 +95,10 @@ jobs:
           env | grep '^BLENDER_USER_' >> "${GITHUB_ENV}"
           blender="blender-${BLENDER_VERSION}-linux-x64/blender"
           ext="${RUNNER_TEMP}/dist/snaxis-v${version}-extension.zip"
-          legacy="${RUNNER_TEMP}/dist/snaxis-v${version}.zip"
           "${blender}" --background --factory-startup --python-exit-code 1 \
-            --python tests/extension_install_test.py -- --phase install "${ext}" "${legacy}"
+            --python tests/extension_install_test.py -- --phase install "${ext}"
           "${blender}" --background --python-exit-code 1 \
-            --python tests/extension_install_test.py -- --phase reload "${ext}" "${legacy}"
+            --python tests/extension_install_test.py -- --phase reload "${ext}"
 
       - name: Run UI Test on a Virtual Display
         env:

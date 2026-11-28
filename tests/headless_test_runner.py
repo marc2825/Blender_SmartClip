@@ -785,44 +785,6 @@ def case_execute_edit_mode_multi_object():
         bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def case_legacy_scene_property_migration():
-    from bpy.props import EnumProperty, PointerProperty
-
-    coll = bpy.data.collections.new("SC_Legacy")
-    # (a) values written through the pre-1.2 bpy.props definitions; Blender 5.x
-    #     keeps them in the system-property storage
-    legacy_a = bpy.data.scenes.new("SC_Legacy_A")
-    bpy.types.Scene.target_scope = EnumProperty(items=[
-        ("SELF", "", ""), ("SELECTED", "", ""), ("VISIBLE", "", ""), ("COLLECTION", "", ""),
-    ], default="VISIBLE")
-    bpy.types.Scene.target_collection = PointerProperty(type=bpy.types.Collection)
-    try:
-        legacy_a.target_scope = "COLLECTION"
-        legacy_a.target_collection = coll
-    finally:
-        del bpy.types.Scene.target_scope
-        del bpy.types.Scene.target_collection
-    # (b) values stored as plain ID properties (Blender 4.x storage)
-    legacy_b = bpy.data.scenes.new("SC_Legacy_B")
-    legacy_b["target_scope"] = 1
-    # (c) already-set prefixed values must not be overwritten
-    legacy_c = bpy.data.scenes.new("SC_Legacy_C")
-    legacy_c["target_scope"] = 0
-    legacy_c.smartclip_target_scope = "VISIBLE"
-
-    try:
-        smart_clipping.migrate_legacy_scene_properties()
-        assert legacy_a.smartclip_target_scope == "COLLECTION"
-        assert legacy_a.smartclip_target_collection == coll
-        assert legacy_b.smartclip_target_scope == "SELECTED"
-        assert legacy_b.smartclip_target_collection is None
-        assert legacy_c.smartclip_target_scope == "VISIBLE"
-    finally:
-        for sc in (legacy_a, legacy_b, legacy_c):
-            bpy.data.scenes.remove(sc)
-        bpy.data.collections.remove(coll)
-
-
 def case_pixel_world_size():
     region, rv3d = _top_view()
     # 50 px per world unit in the synthetic top view
@@ -840,12 +802,11 @@ def case_keymap_independent_of_scene_enable():
     scene = bpy.context.scene
     kmis = _addon_kmis()
     assert kmis, "addon keymap items were not registered"
-    bpy.ops.smartclip.add_default_hotkeys()
     try:
         scene.smartclip_enabled = False
-        # Disabling Snaxis in one scene must not switch the shared
-        # keymap off (another scene may have it enabled); poll() blocks the
-        # operator instead so Shift+G falls through to Blender's own item.
+        # Disabling Snaxis in one scene must not switch the shared keymap item
+        # off (another scene may have it enabled); poll() blocks the operator
+        # instead, so the key press goes on to anything else bound to it.
         assert all(kmi.active for kmi in kmis)
         assert not smart_clipping.SMARTCLIP_OT_modal_move.poll(bpy.context)
         scene.smartclip_enabled = True
@@ -854,25 +815,44 @@ def case_keymap_independent_of_scene_enable():
         scene.smartclip_enabled = True
 
 
-def case_clear_hotkeys_stays_cleared():
-    scene = bpy.context.scene
-    kmis = _addon_kmis()
+def case_keymap_own_item_only():
+    """Only the add-on's own item, in the add-on keyconfig's 3D View keymap,
+    is added on register and removed on unregister; no other keymap changes."""
+    keymap = _sub("keymap")
+    wm = bpy.context.window_manager
+
+    def snapshot():
+        out = {}
+        for kc in (wm.keyconfigs.addon, wm.keyconfigs.user):
+            for km in kc.keymaps:
+                out[(kc.name, km.name)] = [
+                    (k.idname, k.type, k.value, k.shift, k.ctrl, k.alt, k.oskey, k.active)
+                    for k in km.keymap_items if k.idname != keymap.MOVE_IDNAME]
+        return out
+
+    items = list(keymap._addon_keymaps)
+    assert len(items) == 1, items
+    km, kmi = items[0]
+    assert (km.name, km.space_type, km.region_type) == ("3D View", "VIEW_3D", "WINDOW"), (
+        km.name, km.space_type, km.region_type)
+    assert (kmi.idname, kmi.type, kmi.value, kmi.shift, kmi.ctrl, kmi.alt) == (
+        keymap.MOVE_IDNAME, "F", "PRESS", True, False, False)
+    others = [k for k in wm.keyconfigs.addon.keymaps for i in k.keymap_items
+              if i.idname == keymap.MOVE_IDNAME and k.name != "3D View"]
+    assert not others, [k.name for k in others]
+
+    before = snapshot()
+    smart_clipping.unregister()
     try:
-        bpy.ops.smartclip.clear_hotkeys()
-        assert not any(kmi.active for kmi in kmis)
-        # Toggling the scene setting or loading a file must not bring a
-        # removed assignment back.
-        scene.smartclip_enabled = False
-        scene.smartclip_enabled = True
-        for handler in list(bpy.app.handlers.load_post):
-            if getattr(handler, "__module__", "").startswith(PACKAGE):
-                handler(None)
-        assert not any(kmi.active for kmi in kmis), [kmi.active for kmi in kmis]
-        bpy.ops.smartclip.add_default_hotkeys()
-        assert all(kmi.active for kmi in kmis)
+        assert not keymap._addon_keymaps
+        left = [i for k in wm.keyconfigs.addon.keymaps for i in k.keymap_items
+                if i.idname == keymap.MOVE_IDNAME]
+        assert not left, "unregister left the keymap item behind"
+        assert snapshot() == before, "unregister changed other keymap items"
     finally:
-        bpy.ops.smartclip.add_default_hotkeys()
-        scene.smartclip_enabled = True
+        smart_clipping.register()
+    assert snapshot() == before, "register changed other keymap items"
+    assert len(keymap._addon_keymaps) == 1
 
 
 # --- Vertex budget (issues 1.1 / 1.3) ------------------------------------
@@ -1905,9 +1885,7 @@ def case_translations():
 
         props(smart_clipping.prefs.SMARTCLIP_AddonPreferences.bl_rna.properties)
         props(bpy.types.Scene.bl_rna.properties[name] for name in smart_clipping._SCENE_PROPS)
-        for cls in (smart_clipping.SMARTCLIP_OT_modal_move,
-                    smart_clipping.SMARTCLIP_OT_add_default_hotkeys,
-                    smart_clipping.SMARTCLIP_OT_clear_hotkeys):
+        for cls in (smart_clipping.SMARTCLIP_OT_modal_move,):
             want(cls.bl_label, "Operator")
             want(cls.bl_description)
             props(cls.bl_rna.properties)
@@ -1932,57 +1910,6 @@ def case_translations():
     finally:
         for name, value in saved.items():
             setattr(view, name, value)
-
-
-def case_shortcut_reset():
-    keymap = _sub("keymap")
-
-    kmis = _addon_kmis()
-    assert kmis
-    try:
-        for kmi in kmis:
-            kmi.type = "H"
-            kmi.shift = False
-            kmi.ctrl = True
-        keymap.set_hotkeys_wanted(False)
-        assert not any(kmi.active for kmi in kmis)
-        bpy.ops.smartclip.add_default_hotkeys()
-        assert all(kmi.type == "G" and kmi.shift and not kmi.ctrl and kmi.active
-                   for kmi in kmis), [(k.type, k.shift, k.ctrl, k.active) for k in kmis]
-        # The user keymap shows the same items (drawn in the preferences).
-        # Without a window Blender merges the keymaps only when asked to.
-        bpy.context.window_manager.keyconfigs.update()
-        labels = [label for label, _km, _kmi in keymap.user_items()]
-        assert labels == ["Object Mode", "Edit Mode"], labels
-    finally:
-        bpy.ops.smartclip.add_default_hotkeys()
-
-
-def case_shortcut_names_what_it_overrides():
-    # Issue #29: the preferences say what the key takes over.  Without a
-    # window Blender's own keymaps are empty, so a stand-in for Select Grouped
-    # is added after the add-on's item (the UI test checks the real ones).
-    keymap = _sub("keymap")
-
-    km = bpy.context.window_manager.keyconfigs.addon.keymaps.get("Object Mode")
-    ours = next(k for k in km.keymap_items if k.idname == keymap.MOVE_IDNAME)
-    builtin = km.keymap_items.new("object.select_grouped", "G", "PRESS", shift=True)
-    other_key = km.keymap_items.new("object.select_all", "G", "PRESS", ctrl=True)
-    try:
-        bpy.ops.smartclip.add_default_hotkeys()
-        assert keymap.overridden_name(km, ours) == builtin.name, builtin.name
-        builtin.active = False
-        assert keymap.overridden_name(km, ours) is None
-        builtin.active = True
-        keymap.set_hotkeys_wanted(False)
-        assert keymap.overridden_name(km, ours) is None      # off: takes over nothing
-        keymap.set_hotkeys_wanted(True)
-        ours.type = "H"                                       # a key nothing else uses
-        assert keymap.overridden_name(km, ours) is None
-    finally:
-        km.keymap_items.remove(other_key)
-        km.keymap_items.remove(builtin)
-        bpy.ops.smartclip.add_default_hotkeys()
 
 
 def case_redo_keeps_move_settings():
@@ -2048,10 +1975,9 @@ CASES = {
     "execute_moves_all_selected": case_execute_moves_all_selected,
     "selected_scope_moves_active_only": case_selected_scope_moves_active_only,
     "execute_edit_multi_object": case_execute_edit_mode_multi_object,
-    "legacy_prop_migration": case_legacy_scene_property_migration,
     "pixel_world_size": case_pixel_world_size,
     "keymap_independent_of_scene": case_keymap_independent_of_scene_enable,
-    "clear_hotkeys_stays_cleared": case_clear_hotkeys_stays_cleared,
+    "keymap_own_item_only": case_keymap_own_item_only,
     "moving_verts_no_budget": case_moving_vertices_do_not_use_budget,
     "shared_mesh_moving_excluded": case_shared_mesh_moving_vertices_excluded,
     "budget_caps_total_points": case_budget_caps_total_points,
@@ -2081,8 +2007,6 @@ CASES = {
     "pivot_objects": case_pivot_objects,
     "build_summary": case_build_summary,
     "translations": case_translations,
-    "shortcut_reset": case_shortcut_reset,
-    "shortcut_overrides": case_shortcut_names_what_it_overrides,
     "poll_without_active_object": case_poll_without_active_object,
     "redo_keeps_move_settings": case_redo_keeps_move_settings,
 }

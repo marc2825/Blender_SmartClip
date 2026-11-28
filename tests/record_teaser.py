@@ -58,7 +58,7 @@ SCENE_ONLY = False
 
 TRY_IT = """
 [teaser] The demo scene is ready: try the move yourself.
-  1. Point the mouse at the lower (front) view and press Shift+G.
+  1. Point the mouse at the lower (front) view and press Shift+F.
   2. Move to the lower-left corner of the box on the right: the vertex snaps
      onto it ("Snapped Near vertex").
   3. Press A (Align Only X), then X (constrain to X).
@@ -226,7 +226,7 @@ def _frames(out):
         return
 
     yield from hold(6)
-    press("G", shift=True)                       # Move with Guides
+    press("F", shift=True)                       # Move with Guides
     yield from hold(3)
     # Onto the near-left bottom corner of the box on the right (x 3, z 0)
     yield from glide(2.3, 0.5, 12)

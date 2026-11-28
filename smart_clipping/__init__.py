@@ -14,22 +14,7 @@ bl_info = {
     "category": "3D View",
 }
 
-import sys as _sys
-
-# Legacy add-on only (a top-level module; an extension is a sub-package of its
-# repository).  After Install from Disk over an older version, switching the
-# add-on off and on again re-runs only this file.  The submodules of the old
-# version are still loaded, both in sys.modules and as attributes of this
-# package (which `from . import x` would reuse), so drop them and import the
-# new files.  Blender's extension manager unloads an extension's submodules
-# itself when it updates one, so an extension leaves sys.modules alone.
-if "." not in __name__:
-    for _name in [n for n in _sys.modules if n.startswith(__name__ + ".")]:
-        del _sys.modules[_name]
-        globals().pop(_name[len(__name__) + 1:], None)
-
 import bpy
-from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, PointerProperty
 
 from . import hud, i18n, keymap, ops
@@ -37,9 +22,6 @@ from .keymap import _addon_keymaps  # noqa: F401  (tests inspect the registered 
 from .ops import SMARTCLIP_OT_modal_move, remove_all_draw_handlers
 from .prefs import SMARTCLIP_AddonPreferences, get_addon_prefs
 from .utils import SCOPE_ITEMS
-
-# Kept for scripts that read it; the items live in utils.
-_SCOPE_ITEMS = SCOPE_ITEMS
 
 
 # ======================================================================
@@ -128,94 +110,11 @@ _MENUS = ("VIEW3D_MT_transform_object", "VIEW3D_MT_transform")
 
 
 # ======================================================================
-# Scene property migration (<= 1.1 -> 1.2)
-# ======================================================================
-# Up to 1.1 the addon registered `target_scope` / `target_collection` without a prefix.
-# Their saved values stay in the file as orphan ID properties: in the
-# custom-property storage up to Blender 4.x, in the system-property
-# storage (bl_system_properties_get) from Blender 5.0.
-
-_LEGACY_SCENE_PROPS = {
-    "target_scope": "smartclip_target_scope",
-    "target_collection": "smartclip_target_collection",
-}
-
-
-def _legacy_value(scene, name):
-    getter = getattr(scene, "bl_system_properties_get", None)
-    if getter is not None:
-        group = getter()
-        if group is not None and name in group:
-            return group[name]
-    if name in scene.keys():
-        return scene[name]
-    return None
-
-
-def migrate_legacy_scene_properties():
-    """Copy pre-1.2 scene settings into the prefixed properties (once)."""
-    identifiers = [item[0] for item in SCOPE_ITEMS]
-    for scene in bpy.data.scenes:
-        for old, new in _LEGACY_SCENE_PROPS.items():
-            if scene.is_property_set(new):
-                continue
-            value = _legacy_value(scene, old)
-            if value is None:
-                continue
-            try:
-                if new == "smartclip_target_scope":
-                    if isinstance(value, int) and 0 <= value < len(identifiers):
-                        setattr(scene, new, identifiers[value])
-                elif isinstance(value, bpy.types.Collection):
-                    setattr(scene, new, value)
-            except (TypeError, ValueError, AttributeError):
-                pass
-
-
-@persistent
-def _on_load_post(_dummy):
-    migrate_legacy_scene_properties()
-
-
-def _deferred_init():
-    # bpy.data is not accessible while add-ons register at startup.
-    migrate_legacy_scene_properties()
-    return None
-
-
-# ======================================================================
-# Shortcut operators (add-on preferences, scripts)
-# ======================================================================
-
-class SMARTCLIP_OT_add_default_hotkeys(bpy.types.Operator):
-    bl_idname = "smartclip.add_default_hotkeys"
-    bl_label = "Reset Shortcut"
-    bl_description = ("Set the shortcut back to Shift+G in Object Mode and mesh Edit Mode "
-                      "and turn it on")
-
-    def execute(self, _context):
-        keymap.reset_to_default()
-        return {"FINISHED"}
-
-
-class SMARTCLIP_OT_clear_hotkeys(bpy.types.Operator):
-    bl_idname = "smartclip.clear_hotkeys"
-    bl_label = "Turn Off Shortcut"
-    bl_description = "Turn off the shortcut so the key does what Blender assigns to it"
-
-    def execute(self, _context):
-        keymap.set_hotkeys_wanted(False)
-        return {"FINISHED"}
-
-
-# ======================================================================
 # Registration
 # ======================================================================
 
 _classes = (
     SMARTCLIP_AddonPreferences,
-    SMARTCLIP_OT_add_default_hotkeys,
-    SMARTCLIP_OT_clear_hotkeys,
     SMARTCLIP_OT_modal_move,
     SMARTCLIP_PT_panel,
     SMARTCLIP_PT_limits,
@@ -236,46 +135,14 @@ def _align_description(axis):
             f"them. Press A while moving to switch")
 
 
-# ======================================================================
-# Another copy (the legacy add-on and the extension side by side)
-# ======================================================================
-# Both register the same operators, panels, Scene properties and Shift+G
-# items.  The copy enabled second stops before registering anything, and as
-# it then never counts as enabled, Blender does not call its unregister().
-
-_registered = False
-
-
-class AlreadyEnabledError(RuntimeError):
-    pass
-
-
-def other_copy() -> "str | None":
-    """Module name of another copy of this add-on that is registered, if any."""
-    panel = getattr(bpy.types, SMARTCLIP_PT_panel.bl_idname, None)
-    owner = getattr(panel, "__module__", None)
-    if owner is None or owner == __name__:
-        return None
-    return owner
-
-
 def register():
-    global _registered
-    owner = other_copy()
-    if owner is not None:
-        raise AlreadyEnabledError(
-            f"Snaxis is already enabled as \"{owner}\". Only one copy can be on: "
-            f"turn that one off in Preferences > Add-ons (or Get Extensions) first, "
-            f"then enable this one")
-
     i18n.register()
     for cls in _classes:
         bpy.utils.register_class(cls)
 
     bpy.types.Scene.smartclip_enabled = BoolProperty(
         name="Enable Snaxis",
-        description=("Use Snaxis in this scene. When off, its shortcut (Shift+G "
-                     "unless changed) does what Blender assigns to the key"),
+        description="Use Snaxis in this scene. When off, Move with Guides does not start here",
         default=True,
     )
     bpy.types.Scene.smartclip_target_scope = EnumProperty(
@@ -302,23 +169,9 @@ def register():
             menu.append(_menu_entry)
 
     keymap.register_keymaps()
-    if _on_load_post not in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.append(_on_load_post)
-    bpy.app.timers.register(_deferred_init, first_interval=0.0)
-    _registered = True
 
 
 def unregister():
-    global _registered
-    if not _registered:
-        # register() stopped for another copy: what is registered is that
-        # copy's, so leave it alone.
-        return
-    _registered = False
-    if bpy.app.timers.is_registered(_deferred_init):
-        bpy.app.timers.unregister(_deferred_init)
-    if _on_load_post in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.remove(_on_load_post)
     remove_all_draw_handlers()
     keymap.unregister_keymaps()
 

@@ -111,23 +111,6 @@ jobs:
             blender --background --factory-startup --python-exit-code 1 \
               --python tests/install_zip_test.py -- "${RUNNER_TEMP}/dist/snaxis-v${version}.zip"
 
-      # Updating in place from 1.3.2 (the release commit, so it does not
-      # depend on a release or tag) and switching off/on without a restart
-      - name: Install the Legacy ZIP over 1.3.2
-        shell: bash
-        run: |
-          set -euxo pipefail
-          old=e46211e9b478a68be3db6bb40e7cd7a806130c40
-          git fetch --depth=1 origin "${old}"
-          git archive --format=zip --output="${RUNNER_TEMP}/smart_clipping-v1.3.2.zip" "${old}" smart_clipping
-          user="${RUNNER_TEMP}/blender-user-upgrade"
-          BLENDER_USER_RESOURCES="${user}" \
-          BLENDER_USER_SCRIPTS="${user}/scripts" \
-          BLENDER_USER_CONFIG="${user}/config" \
-            blender --background --factory-startup --python-exit-code 1 \
-              --python tests/install_zip_test.py -- \
-                --upgrade-from "${RUNNER_TEMP}/smart_clipping-v1.3.2.zip" "${LEGACY_ZIP}"
-
       # Updating from the last release named Smart Clipping (2.1.0, the file
       # users have) keeps the preferences and a changed key across a restart:
       # the legacy add-on's module name did not change with the rename
@@ -217,10 +200,10 @@ jobs:
                  BLENDER_USER_CONFIG="${user}/config" BLENDER_USER_EXTENSIONS="${user}/extensions"
           log="${RUNNER_TEMP}/extension.log"
           blender --background --factory-startup --python-exit-code 1 \
-            --python tests/extension_install_test.py -- --phase install "${EXT_ZIP}" "${LEGACY_ZIP}" \
+            --python tests/extension_install_test.py -- --phase install "${EXT_ZIP}" \
             2>&1 | tee -a "${log}"
           blender --background --python-exit-code 1 \
-            --python tests/extension_install_test.py -- --phase reload "${EXT_ZIP}" "${LEGACY_ZIP}" \
+            --python tests/extension_install_test.py -- --phase reload "${EXT_ZIP}" \
             2>&1 | tee -a "${log}"
           # Every headless case against the installed extension (its bl_ext
           # module name, real preferences)

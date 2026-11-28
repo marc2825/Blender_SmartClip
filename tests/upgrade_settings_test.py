@@ -3,11 +3,12 @@
 
 """
 Install a new legacy ZIP over an older one the way a user updates, and check
-that the user's settings survive the update and a restart of Blender.
+that the user's preferences survive the update and a restart of Blender.
 
 The legacy add-on keeps its module name (``smart_clipping``) across versions,
-including the rename from Smart Clipping to Snaxis, and Blender keeps
-add-on preferences and a changed key under that name.
+including the rename from Smart Clipping to Snaxis, and Blender keeps the
+add-on preferences under that name.  Users restart Blender after updating:
+the add-on does not reload an older version's modules itself.
 
 Usage (disposable user folders; run both phases with the same folders, the
 second one without --factory-startup so that it loads what the first saved):
@@ -19,15 +20,17 @@ second one without --factory-startup so that it loads what the first saved):
   (same variables) blender --background --python tests/upgrade_settings_test.py -- \\
       --phase after OLD.zip NEW.zip
 
-before: installs and enables OLD.zip, changes every preference and the key,
-  saves, installs NEW.zip over it (as Install from Disk does), saves again.
-after: the add-on is enabled at start-up as the new version, with the
-  preferences and the key as they were changed.
+before: installs and enables OLD.zip, changes every preference both versions
+  have, saves, installs NEW.zip over it (as Install from Disk does), saves.
+after: the add-on is enabled at start-up as the new version, with those
+  preferences as they were changed, and its own Shift+F item in the 3D View
+  keymap.
 
 Exit code 0 = every check passed.
 """
 
 import os
+import re
 import sys
 import traceback
 
@@ -35,13 +38,12 @@ import bpy
 
 MODULE = "smart_clipping"
 MOVE = "view3d.smartclip_move"
-# A value other than the default for every preference the old version has
+# A value other than the default for every preference both versions have
 CUSTOM_PREFS = {
     "snap_behavior": "PULL",
     "snap_distance_px": 23,
     "max_vertex_budget": 12345,
     "search_backend": "KDTREE",
-    "hotkeys_enabled": False,
     "color_guide": (0.1, 0.2, 0.3, 0.4),
     "color_snap": (0.5, 0.6, 0.7, 0.8),
 }
@@ -76,19 +78,17 @@ def expected():
             for k, val in CUSTOM_PREFS.items()}
 
 
-def user_item():
-    keyconfigs = bpy.context.window_manager.keyconfigs
-    keyconfigs.update()
-    km = keyconfigs.user.keymaps.get("Object Mode")
-    for kmi in km.keymap_items if km else ():
-        if kmi.idname == MOVE:
-            return kmi
-    return None
-
-
 def bl_info():
     module = sys.modules.get(MODULE)
     return getattr(module, "bl_info", {}) if module else {}
+
+
+def addon_items():
+    kc = bpy.context.window_manager.keyconfigs.addon
+    found = []
+    for km in (kc.keymaps if kc else ()):
+        found += [(km.name, k.type, k.shift) for k in km.keymap_items if k.idname == MOVE]
+    return found
 
 
 def phase_before(old_zip, new_zip):
@@ -101,13 +101,7 @@ def phase_before(old_zip, new_zip):
     old_version = bl_info().get("version")
     for name, value in CUSTOM_PREFS.items():
         setattr(p, name, value)
-    kmi = user_item()
-    if kmi is not None:
-        kmi.type = "F"
-        bpy.context.window_manager.keyconfigs.update()
     check("old_settings_changed", values(p) == expected(), str(values(p)))
-    kmi = user_item()
-    check("old_key_changed", kmi is not None and kmi.type == "F", str(kmi.type if kmi else None))
     bpy.ops.wm.save_userpref()
 
     # Update in place, as Install from Disk over the old version does
@@ -123,15 +117,12 @@ def phase_after(_old_zip, new_zip):
     if p is None:
         return
     info = bl_info()
-    import re
     match = re.search(r"-v(\d+\.\d+\.\d+)\.zip$", new_zip)
     version = ".".join(str(v) for v in info.get("version", ()))
     check("new_version_loaded", match is not None and match.group(1) == version,
           f"{info.get('name')} {version}")
     check("preferences_kept", values(p) == expected(), str(values(p)))
-    kmi = user_item()
-    check("key_kept", kmi is not None and kmi.type == "F", str(kmi.type if kmi else None))
-    check("use_shortcut_kept", kmi is not None and not kmi.active)
+    check("own_keymap_item", addon_items() == [("3D View", "F", True)], str(addon_items()))
     check("registered", hasattr(bpy.types, "SMARTCLIP_PT_panel")
           and "smartclip_enabled" in bpy.types.Scene.bl_rna.properties)
 

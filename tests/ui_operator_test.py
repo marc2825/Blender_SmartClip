@@ -260,8 +260,8 @@ def _steps():
         return location_3d_to_region_2d(region, rv3d, co)
 
     def start_modal(label):
-        ev("G", "PRESS", shift=True)
-        ev("G", "RELEASE", shift=True)
+        ev("F", "PRESS", shift=True)
+        ev("F", "RELEASE", shift=True)
         yield STEP
         check(f"{label}:modal_started", _running())
 
@@ -407,29 +407,25 @@ def _steps():
     ev("ESC", "PRESS")
     yield STEP
 
-    # Scene setting off: the shared keymap item stays, poll() refuses, and the
-    # key press continues to the next keymap item.  The probe item registered
-    # in main() sits right after ours, in front of Blender's own Shift+G.
-    order = [k.idname for k in bpy.context.window_manager.keyconfigs.user
-             .keymaps["Object Mode"].keymap_items if k.type == "G" and k.shift and not k.ctrl]
-    # What the default key takes over, as the preferences show it (#29):
-    # in Edit Mode Blender's Select Similar; in Object Mode the probe sits
-    # between it and Select Grouped.
-    bpy.context.window_manager.keyconfigs.update()
+    # The default key: Snaxis's own item in the 3D View keymap, on a key none of
+    # Blender's keymaps that the 3D View consults in Object / Edit Mode uses
+    # (they come before the 3D View keymap, so a used key would never reach it)
     user_kc = bpy.context.window_manager.keyconfigs.user
-    taken = {label: smart_clipping.keymap.overridden_name(km, kmi)
-             for label, km, kmi in smart_clipping.keymap.user_items()}
-    # Select Similar is mesh.select_similar or, in newer versions, its menu
-    similar = next((k.name for k in user_kc.keymaps["Mesh"].keymap_items
-                    if k.type == "G" and k.shift and not (k.ctrl or k.alt) and k.active
-                    and k.idname != "view3d.smartclip_move"), None)
-    probe = next((k.name for k in user_kc.keymaps["Object Mode"].keymap_items
-                  if k.idname == "smartclip_test.probe"), None)
-    check("shortcut_names_what_it_overrides",
-          similar and taken == {"Object Mode": probe, "Edit Mode": similar},
-          f"{taken}; expected probe {probe!r}, Select Similar {similar!r}")
+    taken = sorted({f"{name}: {k.name or k.idname}"
+                    for name in ("Object Mode", "Mesh", "Object Non-modal", "3D View Generic",
+                                 "3D View", "Frames", "Screen", "Window")
+                    if user_kc.keymaps.get(name)
+                    for k in user_kc.keymaps[name].keymap_items
+                    if k.active and k.type == "F" and k.shift and not (k.ctrl or k.alt or k.oskey)
+                    and k.idname not in ("view3d.smartclip_move", "smartclip_test.probe")})
+    check("default_key_free_in_blender", not taken, str(taken))
 
-    check("probe_follows_smart_clipping",
+    # Scene setting off: the shared keymap item stays, poll() refuses, and the
+    # key press continues to the next keymap item: the probe registered in
+    # main() after Snaxis's item.
+    order = [k.idname for k in user_kc.keymaps["3D View"].keymap_items
+             if k.type == "F" and k.shift and not k.ctrl]
+    check("probe_follows_snaxis",
           order[:2] == ["view3d.smartclip_move", "smartclip_test.probe"], str(order))
     try:
         SMARTCLIP_TEST_OT_probe.calls = 0
@@ -439,8 +435,8 @@ def _steps():
         check("enabled_takes_precedence", SMARTCLIP_TEST_OT_probe.calls == 0)
 
         scene.smartclip_enabled = False
-        ev("G", "PRESS", shift=True)
-        ev("G", "RELEASE", shift=True)
+        ev("F", "PRESS", shift=True)
+        ev("F", "RELEASE", shift=True)
         yield STEP
         check("disabled_does_not_start", not _running())
         check("disabled_falls_through", SMARTCLIP_TEST_OT_probe.calls == 1,
@@ -1058,11 +1054,12 @@ def main():
                                     search_backend=BACKEND)
             smart_clipping.detector.get_addon_prefs = lambda _ctx: prefs
     bpy.utils.register_class(SMARTCLIP_TEST_OT_probe)
-    # Added in the same tick as the add-on's items so both are merged into the
-    # user keymap together; head=True places it right after Snaxis's.
+    # In the same keymap as the add-on's item, so the key press reaches it
+    # when Snaxis's poll() refuses.  Blender merges add-on items into the user
+    # keymap in reverse order: head=True puts it after Snaxis's item there.
     km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(
-        name="Object Mode", space_type="EMPTY", region_type="WINDOW")
-    km.keymap_items.new("smartclip_test.probe", type="G", value="PRESS", shift=True, head=True)
+        name="3D View", space_type="VIEW_3D")
+    km.keymap_items.new("smartclip_test.probe", type="F", value="PRESS", shift=True, head=True)
 
     steps = _steps()
 
