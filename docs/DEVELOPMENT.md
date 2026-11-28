@@ -213,14 +213,14 @@ The workflows get Blender through `.github/scripts/fetch-blender.sh`: the archiv
 
 What was checked for the latest release, and what was not. Update it with each release.
 
-**2.2.0** (2026-11-25): the snap distance keys, the interface scale, the length unit, reused snap points
+**2.3.0** (2026-11-28): the Blender Extensions review (own keymap item on Shift+F, no copy check, no legacy handling)
 
 | Where | Blender | What | Result |
 |---|---|---|---|
-| Windows 11, real display (Intel Core i7-12700F, 16 GB) | 5.3.0 | UI test from the source folder at interface scale 1 and 2 | 102 / 102 each, 1 skipped (keeping the snap distance on confirm needs installed preferences) |
-| Same | 5.3.0 | Extension ZIP: validate, install and restart phases, headless tests and UI test against the installed extension | Valid; 25 / 25, 36 / 36; 58 / 58; 103 / 103 |
-| Same | 5.3.0, 4.0.2 | Headless tests (the new and changed cases on 4.0.2) | 58 / 58 on 5.3.0; `hud_words` and `snap_distance_keys` pass on 4.0.2 |
-| GitHub Actions, Linux | 4.0.2, 4.2.23, 5.2.4 | Headless tests from the source folder, ZIP contents (49 checks), legacy ZIP install tests (fresh, over 1.3.2, over 2.1.0 keeping the settings) | All pass, nothing skipped |
+| Windows 11, real display (Intel Core i7-12700F, 16 GB) | 5.3.0 | Keymap precedence in a real window: an item in the add-on's 3D View keymap fires on a free key (J, Shift+F) and not on Shift+G (Blender's mode keymaps take it) | As expected |
+| Same | 5.3.0 | UI test from the source folder; against the installed extension (Japanese) | 102 / 102 + 1 skipped (keeping the snap distance on confirm needs installed preferences); 103 / 103 |
+| Same | 5.3.0 | Headless tests; legacy ZIP install test; settings upgrade from 2.1.0 across a restart; extension install and restart phases, headless tests against it | 55 / 55; 13 / 13; 3 / 3 and 5 / 5; 17 / 17, 24 / 24, 55 / 55 |
+| GitHub Actions, Linux | 4.0.2, 4.2.23, 5.2.4 | Headless tests from the source folder, ZIP contents (49 checks), legacy ZIP install test, settings upgrade from 2.1.0 | All pass, nothing skipped |
 | GitHub Actions, Linux | 4.2.23, 5.2.4, 5.3.0 | Extension: validate and build, install and restart phases, headless tests against the installed extension | All pass, nothing skipped |
 | GitHub Actions, Linux, Xvfb | 4.2.23, 5.2.4, 5.3.0 | UI test against the installed extension, with the grid and the KD-tree | 103 / 103 each, nothing skipped |
 | GitHub Actions, Linux, Xvfb | 4.0.2, 5.2.4 | UI test from the source folder, the grid and the KD-tree (release gate, dry run) | 102 / 102 each, 1 skipped as above |
