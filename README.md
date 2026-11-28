@@ -29,7 +29,7 @@
    - Blender 4.2 or later: `snaxis-vX.Y.Z-extension.zip` (an extension)
    - Blender 4.0 / 4.1: `snaxis-vX.Y.Z.zip` (a legacy add-on)
 2. Choose the ZIP under **Preferences → Add-ons → Install from Disk** (**Install** on 4.1 and older) and enable it.
-3. Select an object or vertices, press `Shift+G` and move the mouse. Left click confirms, right click cancels.
+3. Select an object or vertices, press `Shift+F` and move the mouse. Left click confirms, right click cancels.
 
 ## Keys during a move
 
@@ -47,9 +47,9 @@ While a move runs, the status bar also shows these keys. Settings are in the sid
 
 ## Behavior and notes
 
-- **Shortcut**: `Shift+G` is used instead of Blender's Select Grouped and Select Similar (both are still available from the Select menu). You can change or turn off the key in the add-on preferences.
+- **Shortcut**: `Shift+F` in the 3D Viewport, a key Blender leaves free there. You can change or turn off the key in the add-on preferences. Up to 2.2.0 it was `Shift+G`, in place of Select Grouped / Select Similar.
 - **Reference point**: what snaps is the active object's origin in Object Mode, and the median of the selected vertices in Edit Mode.
-- **Extension and legacy add-on**: only one of them can be on at a time; Blender refuses to enable the second one. Settings in the add-on preferences and a changed shortcut do not carry over between them. See [Extension or legacy add-on](docs/details.en.md#extension-or-legacy-add-on) for switching.
+- **Extension and legacy add-on**: turn one off before enabling the other; both on at once register the same tool twice. Settings in the add-on preferences and a changed shortcut do not carry over between them. See [Extension or legacy add-on](docs/details.en.md#extension-or-legacy-add-on) for switching.
 - **Renamed from Smart Clipping**: from 2.1.1 the add-on is called Snaxis, and its ZIPs are `snaxis-…`. It is the same add-on: installing the new legacy ZIP over Smart Clipping keeps your settings. The extension's id changed from `smart_clipping` (2.1.0) to `snaxis`, so remove a 2.1.0 extension before installing this one.
 - **Upgrading from v1.x**: right click now cancels, and snapping onto vertices automatically is the default. The gradual pull of v1.x is available as **Snap Behavior → Gradual Pull**. If you are upgrading from v1.1.x or earlier, remove the old version (module `src`) first.
 

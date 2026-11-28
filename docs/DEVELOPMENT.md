@@ -11,9 +11,9 @@ This guide is for working on the add-on itself. For installing and using it, see
 | `smart_clipping/drawing.py` | Viewport overlay: guide lines, markers, labels, the snap distance ring, the mode lines |
 | `smart_clipping/hud.py` | The words shown during a move (labels, mode lines, status bar), kept apart from drawing so they can be tested |
 | `smart_clipping/i18n.py` | Japanese translation of the interface |
-| `smart_clipping/keymap.py` | The `Shift+G` keymap items and Use Shortcut |
+| `smart_clipping/keymap.py` | The add-on's own keymap item (`Shift+F` in the 3D View keymap) |
 | `smart_clipping/prefs.py`, `utils.py` | Preferences, shared helpers, and the move's decisions (the A / S cycles, what Ctrl does) as plain functions |
-| `smart_clipping/__init__.py` | `bl_info`, panels, menu entries, scene properties and their migration, the check for another copy |
+| `smart_clipping/__init__.py` | `bl_info`, panels, menu entries, scene properties, registration |
 | `smart_clipping/blender_manifest.toml` | The extension manifest (Blender 4.2+); goes into the extension ZIP only |
 | `tests/` | Headless tests, the UI test, and a scene for manual checks |
 | `scripts/` | Version check and release packaging (plain Python 3, no Blender needed) |
@@ -37,7 +37,7 @@ Pass `--python-exit-code 1` to every Blender that runs a test script (CI does): 
 
 ### UI
 
-The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+G`, mouse moves, constraint keys, `Ctrl`, `A`, `S`, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, exact snapping, snap points the move cannot reach (a constraint, Lock Location or Limit Location: "Projected", with Undo / Redo / cancel), `Ctrl`, right click cancelling, the `A` / `S` switches (put back on cancel, one undo step when confirmed without moving, the snap points of a Snap To reused when `S` comes back to it), the snap distance (the interface scale, `PageUp` / `PageDown` and `Alt` + wheel without zooming, the wheel alone still zooming, put back on cancel and kept on confirm; the last needs the add-on's preferences, so it is skipped when the test runs from the source folder), what the shortcut takes over, the status bar, and Edit Mode. It keeps the sidebar open with the panels in the Item tab, so drawing errors in them fail the run.
+The modal operator can only be exercised in a real window. `tests/ui_operator_test.py` feeds Blender simulated input (`Shift+F`, mouse moves, constraint keys, `Ctrl`, `A`, `S`, clicks, `Esc`) and checks parented objects, navigating mid-move, constraints, the redo offset, multi-object moves, exact snapping, snap points the move cannot reach (a constraint, Lock Location or Limit Location: "Projected", with Undo / Redo / cancel), `Ctrl`, right click cancelling, the `A` / `S` switches (put back on cancel, one undo step when confirmed without moving, the snap points of a Snap To reused when `S` comes back to it), the snap distance (the interface scale, `PageUp` / `PageDown` and `Alt` + wheel without zooming, the wheel alone still zooming, put back on cancel and kept on confirm; the last needs the add-on's preferences, so it is skipped when the test runs from the source folder), that the default key reaches the add-on (no keymap of Blender's that the 3D View consults first uses it) and falls through when the scene setting is off, the status bar, and Edit Mode. It keeps the sidebar open with the panels in the Item tab, so drawing errors in them fail the run.
 
 ```sh
 blender --factory-startup --enable-event-simulate --python-exit-code 1 --python tests/ui_operator_test.py
@@ -73,7 +73,7 @@ Registered messages apply to all of Blender, so a word Blender already translate
 
 ### Release ZIPs
 
-`tests/install_zip_test.py` installs the legacy ZIP the way a user would and checks that it enables, carries the license text, registers, keeps a cleared hotkey off, keeps a changed key through Use Shortcut off and on, resets it with Reset Shortcut, disables cleanly, and can be removed. It refuses to run unless the user folders point somewhere disposable:
+`tests/install_zip_test.py` installs the legacy ZIP the way a user would and checks that it enables, carries the license text and no manifest, registers its one keymap item (`Shift+F` in the 3D View keymap), keeps a key changed in the user keymap through switching off and on, disables cleanly, and can be removed. It refuses to run unless the user folders point somewhere disposable:
 
 ```sh
 python scripts/package_addon.py --output-dir /tmp/dist
@@ -81,9 +81,7 @@ BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER
   blender --background --factory-startup --python-exit-code 1 --python tests/install_zip_test.py -- /tmp/dist/snaxis-vX.Y.Z.zip
 ```
 
-With `--upgrade-from OLD.zip` before the ZIP, it first installs and enables `OLD.zip`, then installs the new ZIP over it and switches the add-on off and on without a restart, as a user updating from the Preferences does. CI runs this from 1.3.2 ([#23](https://github.com/marc2825/Snaxis/issues/23)).
-
-`tests/upgrade_settings_test.py` checks that an update keeps the user's settings: in one Blender session it installs and enables an older ZIP, changes every preference and the key, and installs the new ZIP over it; the next session (without `--factory-startup`) must load the new version with those settings. CI runs it from 2.1.0, the last release named Smart Clipping (downloaded from its release and checked against its `.sha256`):
+`tests/upgrade_settings_test.py` checks that an update keeps the user's settings: in one Blender session it installs and enables an older ZIP, changes every preference both versions have, and installs the new ZIP over it; the next session (without `--factory-startup`) must load the new version with those preferences and its own keymap item. Users restart Blender after updating: the add-on does not reload an older version's modules itself, so updating without a restart is not supported. CI runs it from 2.1.0, the last release named Smart Clipping (downloaded from its release and checked against its `.sha256`):
 
 ```sh
 BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts BLENDER_USER_CONFIG=/tmp/bl/config \
@@ -117,8 +115,8 @@ blender --command extension validate dist/snaxis-vX.Y.Z-extension.zip
 
 `tests/extension_install_test.py` installs the extension ZIP with the operator Install from Disk uses, into the User Default repository, in two Blender sessions with the same disposable user folders:
 
-- `install` (with `--factory-startup`): it registers under `bl_ext.user_default.snaxis` (operator, panels, scene properties, keymap items, translations, preferences) with no top-level `smart_clipping` module; every preference and the key are changed and saved. Then the legacy ZIP is installed and enabling it must fail with the "already enabled" message, leaving the extension exactly as it was through the legacy add-on being disabled and removed.
-- `reload` (without `--factory-startup`): the extension is enabled again at start-up with the saved preferences and key. Then the other order: the extension off (nothing left registered), the legacy add-on on, scene settings carried over and its preferences and key at their defaults, the extension refused and uninstalled with the legacy add-on untouched, and finally the extension installed again on its defaults and saved.
+- `install` (with `--factory-startup`): it registers under `bl_ext.user_default.snaxis` (operator, panels, scene properties, its keymap item in the 3D View keymap, translations, preferences) with no top-level module; every preference and the key are changed and saved.
+- `reload` (without `--factory-startup`): the extension is enabled again at start-up with the saved preferences and key; then off (nothing left registered) and on, uninstalled, and installed again on its default preferences; the key is set back to `Shift+F` and saved.
 
 ```sh
 export BLENDER_USER_RESOURCES=/tmp/bl BLENDER_USER_SCRIPTS=/tmp/bl/scripts \
@@ -199,7 +197,7 @@ Measured for [#30](https://github.com/marc2825/Snaxis/issues/30) on a GitHub-hos
 
 | Workflow | Runs on | What it does |
 |---|---|---|
-| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, release ZIP contents check, compile check, headless tests and legacy ZIP install tests (fresh, over 1.3.2, and over 2.1.0 keeping the settings across a restart) on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4; on 4.2.23, 5.2.4 and 5.3.0 the extension: Blender's validate and build, [Extension](#extension)'s install tests, and the headless tests against the installed extension |
+| `blender-ci.yml` | Pushes to `main`, pull requests | Version check, release ZIP contents check, compile check, headless tests and legacy ZIP install tests (fresh, and over 2.1.0 keeping the settings across a restart) on Blender 4.0.2 (oldest supported), 4.2.23, and 5.2.4; on 4.2.23, 5.2.4 and 5.3.0 the extension: Blender's validate and build, [Extension](#extension)'s install tests, and the headless tests against the installed extension |
 | `codeql.yml` | Pushes, pull requests, monthly | CodeQL scan of the Python code |
 | `release-addon.yml` | `v*.*.*` tags, manual runs | UI tests as a gate (the source folder, and the installed extension), then packages both ZIPs, installs the legacy ZIP into Blender 4.0.2, validates and installs the extension into 4.2.23, and publishes a release (see below) |
 | `ui-tests.yml` | Manual, and called by `release-addon.yml` | UI test on a virtual display, on the source folder or the installed extension |
@@ -240,15 +238,25 @@ Not checked:
 
 From 2.1.0 the same sources ship in two ZIPs on GitHub Releases ([#38](https://github.com/marc2825/Snaxis/issues/38)): the legacy add-on (`bl_info`, module `smart_clipping`, Blender 4.0+) and the extension (`blender_manifest.toml`, module `bl_ext.<repository>.snaxis`, Blender 4.2+), which is also what goes to extensions.blender.org. [docs/EXTENSIONS.md](EXTENSIONS.md) has the listing text, the check against the platform's rules, and the submission steps.
 
-**Name.** The add-on was called Smart Clipping up to 2.1.0 and is Snaxis from 2.1.1 (the repository moved from `Blender_SmartClip` to `Snaxis`; GitHub redirects the old links). Everything users see says Snaxis: `bl_info` and manifest names, the panel, messages, the docs, the logo, and the ZIPs (`snaxis-vX.Y.Z.zip`, `snaxis-vX.Y.Z-extension.zip`). For compatibility the internal identifiers did not change: the source folder and the legacy add-on's module `smart_clipping` (so that installing over Smart Clipping keeps the preferences and key, `tests/upgrade_settings_test.py`), the operator ids `view3d.smartclip_move` and `smartclip.*` (keymaps and scripts), the Scene properties `smartclip_*` (values saved in `.blend` files), the class and panel names `SMARTCLIP_*`, and the `SMARTCLIP_UI_*` test variables. The extension, not yet on the platform at the rename, took the id `snaxis`; the 2.1.0 extension from GitHub (id `smart_clipping`) is another copy to the check below.
+**Name.** The add-on was called Smart Clipping up to 2.1.0 and is Snaxis from 2.1.1 (the repository moved from `Blender_SmartClip` to `Snaxis`; GitHub redirects the old links). Everything users see says Snaxis: `bl_info` and manifest names, the panel, messages, the docs, the logo, and the ZIPs (`snaxis-vX.Y.Z.zip`, `snaxis-vX.Y.Z-extension.zip`). For compatibility the internal identifiers did not change: the source folder and the legacy add-on's module `smart_clipping` (so that installing over Smart Clipping keeps the preferences and key, `tests/upgrade_settings_test.py`), the operator ids `view3d.smartclip_move` and `smartclip.*` (keymaps and scripts), the Scene properties `smartclip_*` (values saved in `.blend` files), the class and panel names `SMARTCLIP_*`, and the `SMARTCLIP_UI_*` test variables. The extension, not yet on the platform at the rename, took the id `snaxis`; the 2.1.0 extension from GitHub (id `smart_clipping`) is another copy (see below).
 
 What differs between the two at run time:
 
 - **Module name**: the code uses `__package__` (preferences, translations) and never a literal module name.
 - **`bl_info`**: kept for the legacy add-on; Blender ignores it in an extension and uses the manifest.
-- **Updating in place**: the legacy add-on drops its own old submodules from `sys.modules` when it is re-enabled after an update (`__init__.py`, [#23](https://github.com/marc2825/Snaxis/issues/23)). Only a top-level module does this: Blender's extension manager unloads an extension's submodules itself, and the platform asks extensions to leave `sys` alone.
-- **Both enabled**: they register the same operators, panels, Scene properties and keymap items. `register()` first looks for the panel of another copy (`bpy.types.SMARTCLIP_PT_panel` from another module) and raises `AlreadyEnabledError` before registering anything, so Blender leaves the second copy off with that message, never calls its `unregister()`, and the first copy keeps everything. Copies from two extension repositories are told apart the same way. Versions before 2.1.0 do not check.
+- **Updating**: Blender's extension manager unloads an extension's modules when it updates one. The legacy add-on asks users to restart Blender after installing over an older version; the add-on does not reload modules or touch `sys` itself (2.3.0 removed that, as the platform asks).
+- **Both enabled**: they register the same operators, panels, Scene properties and keymap item, so users turn one off before enabling the other (the guide says so). The add-on registers normally and does not look for another copy (2.3.0 removed that check, as the platform's review asked).
 - **Preferences and a changed key** are stored per module name, so they do not carry over between the two; scene settings (stored in the `.blend` file) do. The guide tells users how to switch.
+
+### What the add-on may register
+
+The Blender Extensions review (2.2.0) set these limits; keep to them when changing registration:
+
+- **Keymaps**: only the add-on's own item, added to the add-on keyconfig on register and removed on unregister, in the keymap of the editor it works in (`"3D View"`, `space_type="VIEW_3D"`). No items in window-level or mode keymaps, no changes to Blender's or the user's keymap items (reading the user keymap to show the key in the preferences is fine; the user changes it there or in Preferences > Keymap).
+- **No other copy checks**: register normally.
+- **No handling of older versions**: no load handlers, timers or property migrations for earlier versions, no reloading of modules or changes to `sys.modules`.
+
+`tests/headless_test_runner.py` (`keymap_own_item_only`) checks that register and unregister add and remove only the add-on's item and leave every other keymap item as it was.
 
 ### License and publishing conditions
 

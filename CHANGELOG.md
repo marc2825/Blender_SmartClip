@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+Changes asked for by the Blender Extensions review.
+
+### Changed
+
+- The shortcut is now `Shift+F` in the 3D Viewport. Move with Guides has its own item in the 3D View keymap and no longer takes over `Shift+G` (Select Grouped / Select Similar), whose keymaps come first there. If you changed the key in an earlier version, set it again in the add-on preferences. (#38)
+- After installing a new version of the legacy add-on over an older one, restart Blender. (#38)
+
+### Removed
+
+- The Use Shortcut preference and the Reset Shortcut / Turn Off Shortcut buttons. The preferences show the shortcut with a checkbox to turn it off and, once changed, a button that sets it back, as in Preferences > Keymap. (#38)
+- The check that refused to enable a second copy (the extension and the legacy add-on); turn one off before enabling the other. (#38)
+- Converting scene settings saved by Smart Clipping 1.1 or earlier. (#38)
+
 ## [2.2.0] - 2026-11-25
 
 ### Added

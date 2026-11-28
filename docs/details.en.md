@@ -13,11 +13,11 @@ From 2.1.0 every release has two ZIPs with the same add-on inside:
 
 On Blender 4.2 or later, use the extension. Both are installed with **Preferences → Add-ons → Install from Disk** (on 4.2 or later you can also drag the ZIP into Blender); do not unzip them.
 
-**Only one at a time.** Both register the same tool, panel, scene settings and shortcut, so only one can be on. Enabling the second one fails with "Snaxis is already enabled as …", naming the one that is on, and leaves that one as it was. Versions before 2.1.0 do not check this, so update or remove an older legacy add-on before installing the extension. The 2.1.0 extension (still named Smart Clipping, id `smart_clipping`) counts as another copy: remove it before installing the `snaxis` extension.
+**One at a time.** Both register the same tool, panel, scene settings and shortcut, so turn one off (or remove it) before enabling the other; with both on, the second replaces the first's registration, and turning either off leaves the other broken until Blender restarts. The 2.1.0 extension (still named Smart Clipping, id `smart_clipping`) is such another copy: remove it before installing the `snaxis` extension.
 
 **Moving from the legacy add-on to the extension:**
 
-1. Note your add-on preferences (Snap Behavior, Snap Distance, Snap Point Limit, the colors, Snap Search, Use Shortcut) and a changed shortcut key. They do not carry over: Blender keeps them per add-on, and the extension starts from the defaults.
+1. Note your add-on preferences (Snap Behavior, Snap Distance, Snap Point Limit, the colors, Snap Search) and a changed shortcut key. They do not carry over: Blender keeps them per add-on, and the extension starts from the defaults.
 2. In **Preferences → Add-ons**, turn the legacy add-on off and remove it (listed as Snaxis, or Smart Clipping up to 2.1.0).
 3. Install the extension ZIP, enable it, and set the preferences and key again.
 
@@ -27,7 +27,7 @@ Snap To, its collection and Align Only are saved in each `.blend` file, so they 
 
 | Input | Action |
 |---|---|
-| `Shift+G` / **Move with Guides** in the panel or in the Object / Mesh > Transform menu | Start a move |
+| `Shift+F` / **Move with Guides** in the panel or in the Object / Mesh > Transform menu | Start a move |
 | Left click / `Enter` | Confirm |
 | Right click / `Esc` | Cancel and restore the original position |
 | Hold `Ctrl` | Move freely without snapping (with Gradual Pull: snap exactly) |
@@ -101,7 +101,7 @@ The sidebar panel (**Tool** tab) holds what changes from task to task; its **Lim
 
 | Setting | Where | Default | Meaning |
 |---|---|---|---|
-| Checkbox in the panel header | Panel | On | Use Snaxis in this scene. Off: the shortcut key (`Shift+G` unless changed) does what Blender assigns to it here |
+| Checkbox in the panel header | Panel | On | Use Snaxis in this scene. Off: Move with Guides does not start here, and its key does what else is assigned to it |
 | Snap To | Panel | Visible Objects | Which meshes to snap to ([Snap To](#snap-to)) |
 | Align Only | Panel | Off | Line up a coordinate instead of snapping onto vertices ([Align Only](#align-only)) |
 | Snap Distance | Panel, preferences | 30 px | How close on screen the moving point must come to a snap point, at interface scale 1: at scale 2 the ring is twice as large. `PageUp` / `PageDown` or `Alt` + wheel change it during a move |
@@ -112,7 +112,7 @@ The sidebar panel (**Tool** tab) holds what changes from task to task; its **Lim
 
 Snap To and Align Only are saved in the `.blend` file per scene; the others are add-on preferences.
 
-**Shortcut** in the add-on preferences: the default `Shift+G` is used instead of Select Grouped in Object Mode and Select Similar in Edit Mode, and the preferences say so under the key (for a changed key, what that key would do). Both are still in the Select menu. **Use Shortcut** turns the shortcut on or off, and turned off it stays off after restarting Blender. The key for Object Mode and Edit Mode can be changed there (or in Preferences → Keymap); **Reset Shortcut** sets `Shift+G` again and turns it on.
+**Shortcut** in the add-on preferences: the key of Move with Guides in the 3D Viewport, `Shift+F` by default (a key Blender does not use there). The checkbox turns it off; a changed key shows a button that sets it back. It is the same item as in Preferences → Keymap > 3D View, and Blender keeps changes with the preferences. Up to 2.2.0 the default was `Shift+G` in the Object Mode and Mesh keymaps, in place of Select Grouped / Select Similar; a key changed there does not carry over, so set it again here.
 
 ## Language
 
@@ -196,20 +196,16 @@ In measurements the Screen-space Grid was faster in almost every case: with 100,
 
 Errors are shown in the system console (on Windows, Window > Toggle System Console).
 
-### "Snaxis is already enabled as …"
+### Something is off after an update
 
-The extension and the legacy add-on are both installed and the other one is on. Turn that one off first; see [Extension or legacy add-on](#extension-or-legacy-add-on).
+Restart Blender after installing a new version over an older one: until then, Blender keeps parts of the old version loaded, and switching the add-on off and on does not replace them.
 
-### Enabling fails after an update
-
-Installing 2.0.0 over 1.x and switching the add-on off and on without restarting Blender can raise an `ImportError`. Install 2.0.1 or later, or restart Blender.
-
-### Shift+G does not start a move
+### Shift+F does not start a move
 
 - Hover over **Move with Guides** in the panel: when it cannot run, the tooltip says why.
 - Check that the checkbox in the panel header is on.
 - Check that you are in Object Mode or mesh Edit Mode with an active object.
-- If the shortcut was turned off or changed, **Reset Shortcut** in the add-on preferences sets `Shift+G` again.
+- Check the shortcut in the add-on preferences (**Shortcut**): it may be turned off or changed; the button next to a changed key sets `Shift+F` again.
 
 ### No candidates appear
 

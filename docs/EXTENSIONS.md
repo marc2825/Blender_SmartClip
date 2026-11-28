@@ -2,7 +2,7 @@
 
 What goes to [extensions.blender.org](https://extensions.blender.org/) for Snaxis (formerly Smart Clipping), checked against the platform's rules, and how to submit it. Work tracked in [#38](https://github.com/marc2825/Snaxis/issues/38).
 
-**Status: not submitted yet.** Do not describe Snaxis as available on the platform until the listing is approved.
+**Status: in review.** 2.2.0 was submitted; the review asked for the changes in [Review feedback](#review-feedback), made in 2.3.0. Do not describe Snaxis as available on the platform until the listing is approved.
 
 ## Package
 
@@ -41,7 +41,7 @@ Snaxis (formerly Smart Clipping) shows guide lines to nearby vertices while you 
 
 ### Quick start
 
-1. Select an object or vertices and press `Shift+G` (or Object / Mesh menu > Transform > Move with Guides).
+1. Select an object or vertices and press `Shift+F` (or Object / Mesh menu > Transform > Move with Guides).
 2. Move the mouse: guide lines appear near vertices, and the point snaps onto them.
 3. Left click or `Enter` confirms, right click or `Esc` cancels. Hold `Ctrl` to move without snapping.
 
@@ -49,9 +49,9 @@ Settings: Sidebar (`N`) > Tool > Snaxis, and the add-on preferences.
 
 ### Good to know
 
-- `Shift+G` is used instead of Select Grouped (Object Mode) and Select Similar (Edit Mode); both stay in the Select menu. The add-on preferences show what the key takes over, and the key can be changed or turned off there.
+- The shortcut is `Shift+F` in the 3D Viewport, a key Blender leaves free there; change or turn it off in the add-on preferences.
 - Snap points are mesh vertices, with modifiers. In very large scenes their number is capped (Snap Point Limit, 50,000 by default): distant objects are thinned out and the panel says so.
-- Do not enable it together with the legacy add-on version from GitHub (also when it is still named Smart Clipping): the second one refuses to start and says which one is on.
+- Do not enable it together with the legacy add-on version from GitHub (also when it is still named Smart Clipping): turn that one off first.
 
 Documentation, source code and issue tracker: https://github.com/marc2825/Snaxis
 ```
@@ -69,6 +69,13 @@ For 2.2.0:
 - The snap distance follows the interface scale.
 - Lengths in the labels follow Scene > Units > Length (in Blender's default scene, meters).
 - Switching Snap To back with S is instant.
+```
+
+For 2.3.0 (after the review):
+
+```markdown
+- The shortcut is now Shift+F, the add-on's own item in the 3D View keymap (it no longer takes over Shift+G in Blender's Object Mode and Mesh keymaps). A key changed in an earlier version needs to be set again.
+- The add-on registers only its own things: no check for another installed copy, no keymap changes beyond its own item, no handling of older versions.
 ```
 
 ## Media
@@ -109,7 +116,7 @@ Sources: [terms of service](https://extensions.blender.org/terms-of-service/) (l
 | Fully functional, documented, maintained (3.3) | Required | Met: guide, issue tracker, CI |
 | No obfuscated code or byte code; Python only, no pre-compiled packages (3.5, 3.6) | Required | Met |
 | No negative impact on Blender's performance or stability (3.7) | Required | Met as far as tested: the add-on does work only during a move, and the snap point limit bounds it on large scenes |
-| Does not tamper with other extensions, the OS or user data (3.9) | Required | Met: it never disables or edits another add-on. When the legacy copy is on, the extension stops its own registration and leaves the other copy alone |
+| Does not tamper with other extensions, the OS or user data (3.9) | Required | Met: it never disables, edits or looks for another add-on, and changes no keymap item but its own |
 | No extra requirements, paid content or registration (3.10); no ads, donation or purchase links in the UI (6.1–6.3) | Required | Met: the UI has no links of that kind (`bl_info` keeps a documentation and tracker link for the legacy add-on, which Blender ignores in an extension) |
 | Network permission and `bpy.app.online_access` (4.x); self-contained, no remote code (5.1–5.3) | Required | Met: no network access, no downloads, no dependency on other extensions |
 | Manifest: required fields, no empty values, tagline ≤ 64 characters without end punctuation, `blender_version_min` ≥ 4.2.0, valid tags | Required | Met: `blender --command extension validate` passes on 4.2.23, 5.2.4 and 5.3.0, and `tests/package_test.py` checks the rest |
@@ -117,12 +124,23 @@ Sources: [terms of service](https://extensions.blender.org/terms-of-service/) (l
 | No auto-updater; no pip installs at run time | Guideline (required) | Met |
 | `keyconfigs.addon` may be None in background mode | Guideline (required) | Met: `keymap.register_keymaps()` returns when it is None |
 | Preferences by `__package__`, not `__name__`; no literal `bl_ext` / repository names | Guideline (required) | Met: `prefs.ADDON_MODULE_NAME = __package__`; translations registered under `__package__` |
-| `sys` read-only; no module loading tricks | Guideline (required) | Met for the extension: the legacy add-on's clean-up of its own old submodules (`__init__.py`, [#23](https://github.com/marc2825/Snaxis/issues/23)) runs only as a top-level module, never in an extension |
+| `sys` read-only; no module loading tricks | Guideline (required) | Met: the add-on does not touch `sys` or reload modules (2.3.0 removed the legacy add-on's clean-up of its old submodules) |
 | No writing into the add-on's folder; `extension_path_user` for files | Guideline (required) | Met: it writes no files |
 | `bl_info` | Guideline (the manual's conversion steps remove it) | Kept for the legacy add-on (Blender 4.0 / 4.1). Blender ignores it in an extension and only mentions it with `--debug-python` |
-| Keymap conflicts | Not covered by the rules | `Shift+G` replaces Select Grouped / Select Similar; the preferences say so under the key, the key can be changed or turned off, and the listing and README say it. No change needed for review |
+| Keymaps (review of 2.2.0) | Review | Met in 2.3.0: one item of the add-on's own, `Shift+F` in the add-on keyconfig's 3D View keymap, added on register and removed on unregister; no window-level or mode keymaps, no changes to Blender's or the user's items (`keymap_own_item_only` checks it). `Shift+F` is free in the keymaps the 3D View consults first, so it reaches the add-on |
+| No other copy checks; no handling of older versions (review of 2.2.0) | Review | Met in 2.3.0: the check for another installed copy, the load handler and timer that migrated pre-1.2 scene properties, and the shortcut reset operators are removed |
 
 **Outside the rules, still open** ([#21](https://github.com/marc2825/Snaxis/issues/21), a technical screening, not a formal freedom-to-operate opinion): US11204679B1 (Adobe, US only, active) comes close in one configuration and should be checked by a professional before distributing with a US focus. The rename to Snaxis (2.1.1) moves away from the US trademark SMARTCLIP (registration 7700431) that #21 noted; "Snaxis" itself has not been searched in the trademark registers (USPTO, J-PlatPat): a web search found no product of that name, only the company name Synaxis in unrelated fields. Neither blocks the submission under the platform's rules.
+
+## Review feedback
+
+On the 2.2.0 submission (all done in 2.3.0):
+
+| Moderator's request | Change |
+|---|---|
+| "Do not modify keymaps like this, you can register/unregister your own, nothing else is allowed. Also, do not register on Window Manager, register 3D View keymap on 3D View" | The add-on adds only its own item to the add-on keyconfig's `"3D View"` keymap (`space_type="VIEW_3D"`) and removes it on unregister. The items in the window-level Object Mode / Mesh keymaps, the Use Shortcut preference and the Reset / Turn Off Shortcut operators (which changed the user's keymap items) are gone. As Blender's mode keymaps take `Shift+G` before the 3D View keymap, the default key is now `Shift+F`, which nothing there uses. The preferences show the item for the user to change or turn off |
+| "Remove 'other copy' checks, just register the add-on normally." | `register()` no longer looks for another installed copy; the docs ask users to turn one off before enabling the other |
+| "Remove load handler and timer for 'legacy' versioning, this is the first version published on the platform, do not handle any older versions automatically." | The pre-1.2 scene property migration, its `load_post` handler and timer are removed, and with them the legacy add-on's clean-up of its old modules after an update (users restart Blender after updating) |
 
 ## Submitting (the owner)
 
